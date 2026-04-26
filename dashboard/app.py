@@ -173,7 +173,7 @@ for i in range(len(funnel_data) - 1):
     nxt  = funnel_data.iloc[i+1]["total_opportunities"]
     rate = round(nxt / curr * 100, 1) if curr > 0 else 0
     conv_labels.append({
-        "stage": funnel_data.iloc[i]["stage"],
+        "stage": funnel_data.iloc[i+1]["stage"],
         "label": f"↓ {rate}%",
         "total_opportunities": curr,
     })
