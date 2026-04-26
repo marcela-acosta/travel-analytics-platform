@@ -189,7 +189,7 @@ if df.empty:
 
 # Derived columns
 df["win_prob"] = df["stage"].map(STAGE_WIN_PROB).fillna(0)
-df["weighted_value"] = df["value"] * df["win_prob"]
+df["weighted_value"] = df["value"].astype(float) * df["win_prob"]
 df["close_bucket"] = df["days_until_expected_close"].apply(close_bucket)
 df["close_bucket"] = pd.Categorical(df["close_bucket"], categories=CLOSE_BUCKET_ORDER, ordered=True)
 
