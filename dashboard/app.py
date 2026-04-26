@@ -505,7 +505,7 @@ with ds_left:
     )
     deal_labels = (
         alt.Chart(avg_deal_stage)
-        .mark_text(dy=-8, fontSize=10, color="#0f2744")
+        .mark_text(dy=-8, fontSize=10, color="#ffffff")
         .encode(
             x=alt.X("stage:N", sort=STAGE_ORDER),
             y=alt.Y("avg_deal_size:Q"),
@@ -527,7 +527,7 @@ with ds_right:
     )
     stale_labels = (
         alt.Chart(stale_chart_data)
-        .mark_text(dy=-8, fontSize=10, color="#0f2744")
+        .mark_text(dy=-8, fontSize=10, color="#ffffff")
         .encode(
             x=alt.X("stage:N", sort=STAGE_ORDER),
             y=alt.Y("stale_opportunities:Q"),
