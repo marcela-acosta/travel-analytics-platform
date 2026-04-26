@@ -207,7 +207,7 @@ funnel_bars = (
 
 funnel_labels = (
     alt.Chart(funnel_data)
-    .mark_text(align="left", dx=6, fontSize=12, fontWeight="bold", color="#ffffff")
+    .mark_text(align="right", dx=-8, fontSize=12, fontWeight="bold", color="#ffffff")
     .encode(
         y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
         x=alt.X("total_opportunities:Q"),
