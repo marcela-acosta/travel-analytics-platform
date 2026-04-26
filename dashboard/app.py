@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
+import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-# Toggle: set USE_MOCK=false once gold.gld_dashboard_opportunities exists in BigQuery
 USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
 
 STAGE_ORDER = ["Prospecting", "Qualified", "Proposal", "Negotiation", "Won", "Lost"]
@@ -20,6 +20,10 @@ STAGE_COUNTS = {
     "Won": 18,
     "Lost": 22,
 }
+
+BLUE_PALETTE = ["#1a3d6e", "#1e5fa8", "#2e7dd1", "#4a9eed", "#7ab8f5", "#a8d4f5"]
+PRIMARY = "#1e5fa8"
+LIGHT_BG = "#f0f5fb"
 
 
 def get_mock_data() -> pd.DataFrame:
@@ -67,26 +71,91 @@ def load_data() -> pd.DataFrame:
     return df.sort_values("stage").reset_index(drop=True)
 
 
+def hbar(df: pd.DataFrame, x: str, y: str, title: str = "", height: int = 280) -> alt.Chart:
+    return (
+        alt.Chart(df)
+        .mark_bar(color=PRIMARY, cornerRadiusEnd=4)
+        .encode(
+            x=alt.X(f"{x}:Q", title=""),
+            y=alt.Y(f"{y}:N", sort="-x", title=""),
+            tooltip=[y, x],
+        )
+        .properties(title=title, height=height)
+    )
+
+
+def vbar(df: pd.DataFrame, x: str, y: str, order: list | None = None, title: str = "", height: int = 280) -> alt.Chart:
+    sort = order if order else "-y"
+    return (
+        alt.Chart(df)
+        .mark_bar(color=PRIMARY, cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X(f"{x}:N", sort=sort, title=""),
+            y=alt.Y(f"{y}:Q", title=""),
+            tooltip=[x, y],
+        )
+        .properties(title=title, height=height)
+    )
+
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Pipeline Health Monitor",
-    page_icon="🟢",
+    page_icon="📊",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ── Sidebar filters ───────────────────────────────────────────────────────────
+st.markdown(
+    """
+    <style>
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #0f2744;
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span {
+        color: #d6e4f7 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: #8aafd4 !important;
+        font-size: 0.8rem;
+    }
+    /* KPI cards */
+    [data-testid="stMetric"] {
+        background-color: #f0f5fb;
+        border-left: 4px solid #1e5fa8;
+        padding: 16px 20px;
+        border-radius: 8px;
+    }
+    [data-testid="stMetricLabel"] { color: #4a6b8a; font-size: 0.85rem; }
+    [data-testid="stMetricValue"] { color: #0f2744; font-weight: 700; }
+    /* Section headers */
+    h2 { color: #0f2744 !important; border-bottom: 2px solid #e0ebf8; padding-bottom: 6px; }
+    /* Divider */
+    hr { border-color: #e0ebf8; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 raw = load_data()
 
 with st.sidebar:
-    st.header("Filters")
+    st.markdown("## 📊 Pipeline Health")
+    st.markdown("---")
+    st.markdown("**Filters**")
     selected_regions = st.multiselect("Region", options=REGIONS, default=REGIONS)
     selected_products = st.multiselect("Product", options=PRODUCTS, default=PRODUCTS)
     selected_agents = st.multiselect("Agent", options=AGENTS, default=AGENTS)
-    show_stale_only = st.checkbox("Stale only (>14 days without update)")
-    st.divider()
-    st.caption("Data refreshes every 60 seconds.")
-    if USE_MOCK:
-        st.warning("Mock data active.\nSet USE_MOCK=false to connect BigQuery.")
+    st.markdown("---")
+    show_stale_only = st.checkbox("Stale only (>14 days)")
+    st.markdown(f"<p>Refreshes every 60 s · {datetime.now().strftime('%H:%M')}</p>", unsafe_allow_html=True)
 
 # Apply filters
 df = raw[
@@ -98,8 +167,8 @@ df = raw[
 if show_stale_only:
     df = df[df["is_stale"]].copy()
 
-# ── Title ─────────────────────────────────────────────────────────────────────
-st.title("Pipeline Health Monitor 🟢")
+# ── Header ────────────────────────────────────────────────────────────────────
+st.markdown("# Pipeline Health Monitor")
 st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if df.empty:
@@ -113,13 +182,14 @@ closed = won_opps + lost_opps
 win_rate = (won_opps / closed * 100) if closed > 0 else 0
 avg_deal = df[df["stage"] == "Won"]["value"].mean() if won_opps > 0 else 0
 stale_count = int(df["is_stale"].sum())
+stale_pct = round(stale_count / len(df) * 100, 1) if len(df) > 0 else 0
 
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Total Opportunities", f"{len(df):,}")
-k2.metric("Total Pipeline Value", f"${df['value'].sum():,.0f}")
+k2.metric("Pipeline Value", f"${df['value'].sum():,.0f}")
 k3.metric("Win Rate", f"{win_rate:.1f}%")
-k4.metric("Avg Won Deal Size", f"${avg_deal:,.0f}")
-k5.metric("Stale Opportunities", f"{stale_count:,}")
+k4.metric("Avg Won Deal", f"${avg_deal:,.0f}")
+k5.metric("Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse")
 
 st.divider()
 
@@ -136,14 +206,19 @@ stage_agg = (
     )
     .reset_index()
 )
+stage_agg["stage"] = stage_agg["stage"].astype(str)
 
 left, right = st.columns(2)
 with left:
-    st.caption("Opportunities by Stage")
-    st.bar_chart(stage_agg.set_index("stage")["total_opportunities"])
+    st.altair_chart(
+        vbar(stage_agg, "stage", "total_opportunities", order=STAGE_ORDER, title="Opportunities by Stage"),
+        use_container_width=True,
+    )
 with right:
-    st.caption("Pipeline Value by Stage ($)")
-    st.bar_chart(stage_agg.set_index("stage")["total_value"])
+    st.altair_chart(
+        vbar(stage_agg, "stage", "total_value", order=STAGE_ORDER, title="Pipeline Value by Stage ($)"),
+        use_container_width=True,
+    )
 
 st.divider()
 
@@ -156,17 +231,12 @@ active_stages = [s for s in STAGE_ORDER[:-1] if s in counts]
 for i in range(len(active_stages) - 1):
     src, dst = active_stages[i], active_stages[i + 1]
     rate = (counts.get(dst, 0) / counts[src] * 100) if counts.get(src, 0) > 0 else 0
-    conversion_rows.append(
-        {"Transition": f"{src} → {dst}", "Conversion Rate": f"{rate:.1f}%", "Rate": rate}
-    )
+    conversion_rows.append({"Transition": f"{src} → {dst}", "Conversion Rate": f"{rate:.1f}%"})
 
 if closed > 0:
-    conversion_rows.append(
-        {"Transition": "Closed Won Rate (Won / Won+Lost)", "Conversion Rate": f"{win_rate:.1f}%", "Rate": win_rate}
-    )
+    conversion_rows.append({"Transition": "Closed Won Rate (Won / Won+Lost)", "Conversion Rate": f"{win_rate:.1f}%"})
 
-conv_df = pd.DataFrame(conversion_rows)
-st.dataframe(conv_df[["Transition", "Conversion Rate"]], use_container_width=True, hide_index=True)
+st.dataframe(pd.DataFrame(conversion_rows), use_container_width=True, hide_index=True)
 
 st.divider()
 
@@ -176,22 +246,22 @@ st.subheader("Regional Breakdown & Product Mix")
 reg_col, prod_col = st.columns(2)
 
 with reg_col:
-    st.caption("Opportunities by Region")
     region_agg = (
         df.groupby("region")
-        .agg(total_opportunities=("value", "count"), total_value=("value", "sum"))
+        .agg(total_opportunities=("value", "count"))
+        .reset_index()
         .sort_values("total_opportunities", ascending=False)
     )
-    st.bar_chart(region_agg["total_opportunities"])
+    st.altair_chart(hbar(region_agg, "total_opportunities", "region", title="Opportunities by Region"), use_container_width=True)
 
 with prod_col:
-    st.caption("Opportunities by Product")
     product_agg = (
         df.groupby("product")
-        .agg(total_opportunities=("value", "count"), total_value=("value", "sum"))
+        .agg(total_opportunities=("value", "count"))
+        .reset_index()
         .sort_values("total_opportunities", ascending=False)
     )
-    st.bar_chart(product_agg["total_opportunities"])
+    st.altair_chart(hbar(product_agg, "total_opportunities", "product", title="Opportunities by Product"), use_container_width=True)
 
 st.divider()
 
@@ -213,16 +283,14 @@ top_opps = agent_agg.sort_values("opportunities", ascending=False).head(10)
 
 lb_left, lb_right = st.columns(2)
 with lb_left:
-    st.caption("Top 10 Agents by Pipeline Value")
-    st.bar_chart(top_value.set_index("agent")["total_value"])
+    st.altair_chart(hbar(top_value, "total_value", "agent", title="Top 10 Agents by Pipeline Value"), use_container_width=True)
 with lb_right:
-    st.caption("Top 10 Agents by Opportunities")
-    st.bar_chart(top_opps.set_index("agent")["opportunities"])
+    st.altair_chart(hbar(top_opps, "opportunities", "agent", title="Top 10 Agents by Opportunities"), use_container_width=True)
 
 st.divider()
 
-# ── Avg deal size by stage ────────────────────────────────────────────────────
-st.subheader("Average Deal Size by Stage")
+# ── Avg deal size + Stale by stage ────────────────────────────────────────────
+st.subheader("Deal Size & Pipeline Health")
 
 avg_deal_stage = (
     df.groupby("stage", observed=True)["value"]
@@ -230,14 +298,27 @@ avg_deal_stage = (
     .reset_index()
     .rename(columns={"value": "avg_deal_size"})
 )
-st.bar_chart(avg_deal_stage.set_index("stage")["avg_deal_size"])
+avg_deal_stage["stage"] = avg_deal_stage["stage"].astype(str)
 
-st.divider()
-
-# ── Stale opportunities ───────────────────────────────────────────────────────
-st.subheader("Stale Opportunities (>14 days without update)")
-
-st.bar_chart(stage_agg.set_index("stage")["stale_opportunities"])
+ds_left, ds_right = st.columns(2)
+with ds_left:
+    st.altair_chart(
+        vbar(avg_deal_stage, "stage", "avg_deal_size", order=STAGE_ORDER, title="Avg Deal Size by Stage ($)"),
+        use_container_width=True,
+    )
+with ds_right:
+    stale_chart_data = stage_agg[["stage", "stale_opportunities"]].copy()
+    st.altair_chart(
+        alt.Chart(stale_chart_data)
+        .mark_bar(color="#e05c2d", cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X("stage:N", sort=STAGE_ORDER, title=""),
+            y=alt.Y("stale_opportunities:Q", title=""),
+            tooltip=["stage", "stale_opportunities"],
+        )
+        .properties(title="Stale Opportunities by Stage (>14 days)", height=280),
+        use_container_width=True,
+    )
 
 st.divider()
 
