@@ -349,8 +349,11 @@ heatmap_chart = (
                 axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
         color=alt.Color(
             "opportunities:Q",
-            scale=alt.Scale(scheme="blues", domainMin=0),
-            legend=None,
+            scale=alt.Scale(
+                scheme="blueorange",
+                domainMid=heatmap_data["opportunities"].mean(),
+            ),
+            legend=alt.Legend(title="Opps", orient="right"),
         ),
         tooltip=[
             alt.Tooltip("region:N", title="Region"),
@@ -375,7 +378,7 @@ text_layer = (
         y=alt.Y("region:N", sort=REGIONS),
         text=alt.Text("opportunities:Q"),
         color=alt.condition(
-            alt.datum.opportunities > _max_opp * 0.55,
+            (alt.datum.opportunities > _max_opp * 0.72) | (alt.datum.opportunities < _max_opp * 0.28),
             alt.value("white"),
             alt.value("#0f2744"),
         ),
