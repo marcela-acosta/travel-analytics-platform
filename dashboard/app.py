@@ -26,7 +26,7 @@ PRODUCT_COLORS = {
     "Package 2x": "#f4a261", "Package 3x": "#e76f51",
 }
 PRIMARY   = "#1e5fa8"
-STAGE_BLUES = ["#1a3d6e", "#1e5fa8", "#2e7dd1", "#4a9eed", "#7ab8f5", "#b0cfe8"]
+STAGE_BLUES = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981", "#ef4444"]
 
 
 def get_mock_data() -> pd.DataFrame:
@@ -227,7 +227,11 @@ conv_text = (
 
 fn_left, fn_right = st.columns([3, 1])
 with fn_left:
-    st.altair_chart((funnel_bars + funnel_labels + conv_text), use_container_width=True)
+    funnel = (funnel_bars + funnel_labels + conv_text).configure(
+        background="white",
+        padding={"left":16,"right":24,"top":16,"bottom":16},
+    )
+    st.altair_chart(funnel, use_container_width=True)
 
 with fn_right:
     st.markdown("**Conversion rates**")
