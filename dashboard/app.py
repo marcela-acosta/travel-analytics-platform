@@ -337,12 +337,18 @@ heatmap_data = (
 heatmap_data["pct"] = (heatmap_data["opportunities"] / heatmap_data["opportunities"].sum() * 100).round(1)
 _max_opp = heatmap_data["opportunities"].max()
 
+CELL = 95
+
 heatmap_chart = (
     alt.Chart(heatmap_data)
-    .mark_rect(cornerRadius=2)
+    .mark_rect(stroke="white", strokeWidth=3)
     .encode(
-        x=alt.X("product:N", title="", sort=PRODUCTS, axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
-        y=alt.Y("region:N", title="", sort=REGIONS, axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
+        x=alt.X("product:N", title="", sort=PRODUCTS,
+                scale=alt.Scale(step=CELL),
+                axis=alt.Axis(labelAngle=-30, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
+        y=alt.Y("region:N", title="", sort=REGIONS,
+                scale=alt.Scale(step=CELL),
+                axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
         color=alt.Color(
             "opportunities:Q",
             scale=alt.Scale(scheme="blues", domainMin=0),
@@ -356,15 +362,15 @@ heatmap_chart = (
             alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
         ],
     )
-    .properties(title="Opportunities Heatmap: Region × Product", height=260)
+    .properties(title="Opportunities Heatmap: Region × Product")
 )
 
 text_layer = (
     alt.Chart(heatmap_data)
-    .mark_text(fontSize=14, fontWeight="bold")
+    .mark_text(fontSize=16, fontWeight="bold")
     .encode(
-        x=alt.X("product:N", sort=PRODUCTS),
-        y=alt.Y("region:N", sort=REGIONS),
+        x=alt.X("product:N", sort=PRODUCTS, scale=alt.Scale(step=CELL)),
+        y=alt.Y("region:N", sort=REGIONS, scale=alt.Scale(step=CELL)),
         text=alt.Text("opportunities:Q"),
         color=alt.condition(
             alt.datum.opportunities > _max_opp * 0.55,
@@ -374,7 +380,9 @@ text_layer = (
     )
 )
 
-st.altair_chart(heatmap_chart + text_layer, use_container_width=True)
+col_hm = st.columns([1, 3, 1])
+with col_hm[1]:
+    st.altair_chart(heatmap_chart + text_layer)
 
 st.divider()
 
