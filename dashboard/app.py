@@ -337,58 +337,72 @@ heatmap_data = (
 heatmap_data["pct"] = (heatmap_data["opportunities"] / heatmap_data["opportunities"].sum() * 100).round(1)
 _max_opp = heatmap_data["opportunities"].max()
 
-CELL = 95
+CELL = 110
 
-heatmap_chart = (
+_base_enc = dict(
+    x=alt.X("product:N", title="", sort=PRODUCTS,
+             axis=alt.Axis(labelAngle=-20, labelFontSize=12, labelFontWeight="bold", labelPadding=8)),
+    y=alt.Y("region:N", title="", sort=REGIONS,
+             axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=8)),
+)
+_tooltip = [
+    alt.Tooltip("region:N", title="Region"),
+    alt.Tooltip("product:N", title="Product"),
+    alt.Tooltip("opportunities:Q", title="Opportunities"),
+    alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
+    alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
+]
+_step = dict(width=alt.Step(CELL), height=alt.Step(CELL))
+
+grid_layer = (
     alt.Chart(heatmap_data)
-    .mark_rect(stroke="white", strokeWidth=3)
-    .encode(
-        x=alt.X("product:N", title="", sort=PRODUCTS,
-                axis=alt.Axis(labelAngle=-30, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
-        y=alt.Y("region:N", title="", sort=REGIONS,
-                axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
-        color=alt.Color(
-            "opportunities:Q",
-            scale=alt.Scale(
-                range=["#2166ac", "#92c5de", "#f7f7f7", "#f4a582", "#d6191b"],
-                domainMid=heatmap_data["opportunities"].mean(),
-            ),
-            legend=alt.Legend(title="Opps", orient="right"),
-        ),
-        tooltip=[
-            alt.Tooltip("region:N", title="Region"),
-            alt.Tooltip("product:N", title="Product"),
-            alt.Tooltip("opportunities:Q", title="Opportunities"),
-            alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
-            alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
-        ],
-    )
-    .properties(
-        title="Opportunities Heatmap: Region × Product",
-        width=alt.Step(CELL),
-        height=alt.Step(CELL),
-    )
+    .mark_rect(color="#f4f7fb", stroke="#dde6f0", strokeWidth=1)
+    .encode(**_base_enc)
+    .properties(**_step)
 )
 
-text_layer = (
+bubble_layer = (
     alt.Chart(heatmap_data)
-    .mark_text(fontSize=16, fontWeight="bold")
+    .mark_circle(opacity=0.88)
     .encode(
-        x=alt.X("product:N", sort=PRODUCTS),
-        y=alt.Y("region:N", sort=REGIONS),
+        **_base_enc,
+        size=alt.Size(
+            "opportunities:Q",
+            scale=alt.Scale(range=[300, 5500]),
+            legend=None,
+        ),
+        color=alt.Color(
+            "opportunities:Q",
+            scale=alt.Scale(scheme="blues", domainMin=0),
+            legend=alt.Legend(title="Opps", orient="right", gradientLength=120),
+        ),
+        tooltip=_tooltip,
+    )
+    .properties(**_step)
+)
+
+label_layer = (
+    alt.Chart(heatmap_data)
+    .mark_text(fontSize=13, fontWeight="bold")
+    .encode(
+        **_base_enc,
         text=alt.Text("opportunities:Q"),
         color=alt.condition(
-            (alt.datum.opportunities > _max_opp * 0.72) | (alt.datum.opportunities < _max_opp * 0.28),
+            alt.datum.opportunities > _max_opp * 0.65,
             alt.value("white"),
             alt.value("#0f2744"),
         ),
     )
-    .properties(width=alt.Step(CELL), height=alt.Step(CELL))
+    .properties(**_step)
 )
 
-col_hm = st.columns([1, 3, 1])
+heatmap_chart = (grid_layer + bubble_layer + label_layer).properties(
+    title=alt.TitleParams("Region × Product Opportunity Matrix", fontSize=14, fontWeight="bold", anchor="start")
+)
+
+col_hm = st.columns([1, 4, 1])
 with col_hm[1]:
-    st.altair_chart(heatmap_chart + text_layer)
+    st.altair_chart(heatmap_chart)
 
 st.divider()
 
