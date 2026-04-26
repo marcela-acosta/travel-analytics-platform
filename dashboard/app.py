@@ -207,7 +207,7 @@ funnel_bars = (
 
 funnel_labels = (
     alt.Chart(funnel_data)
-    .mark_text(align="left", dx=6, fontSize=12, fontWeight="bold", color="#0f2744")
+    .mark_text(align="left", dx=6, fontSize=12, fontWeight="bold", color="#ffffff")
     .encode(
         y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
         x=alt.X("total_opportunities:Q"),
@@ -227,11 +227,7 @@ conv_text = (
 
 fn_left, fn_right = st.columns([3, 1])
 with fn_left:
-    funnel = (funnel_bars + funnel_labels + conv_text).configure(
-        background="white",
-        padding={"left":16,"right":24,"top":16,"bottom":16},
-    )
-    st.altair_chart(funnel, use_container_width=True)
+    st.altair_chart((funnel_bars + funnel_labels + conv_text), use_container_width=True)
 
 with fn_right:
     st.markdown("**Conversion rates**")
