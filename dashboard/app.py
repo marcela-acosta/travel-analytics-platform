@@ -217,7 +217,7 @@ funnel_labels = (
 
 conv_text = (
     alt.Chart(conv_df)
-    .mark_text(align="right", dx=-8, fontSize=11, color="#e05c2d", fontWeight="bold")
+    .mark_text(align="right", dx=-8, fontSize=11, color="#ffffff", fontWeight="bold")
     .encode(
         y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
         x=alt.X("total_opportunities:Q"),
