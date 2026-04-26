@@ -134,6 +134,13 @@ st.markdown(
     }
     [data-testid="stMetricLabel"] { color: #4a6b8a; font-size: 0.85rem; }
     [data-testid="stMetricValue"] { color: #0f2744; font-weight: 700; }
+    /* Multiselect tags */
+    [data-baseweb="tag"] {
+        background-color: #1e5fa8 !important;
+    }
+    [data-baseweb="tag"] span {
+        color: #ffffff !important;
+    }
     /* Section headers */
     h2 { color: #0f2744 !important; border-bottom: 2px solid #e0ebf8; padding-bottom: 6px; }
     /* Divider */
