@@ -329,32 +329,45 @@ with prod_col:
     st.altair_chart(hbar(product_agg, "total_opportunities", "product", title="Opportunities by Product"), use_container_width=True)
 
 # Heatmap Region × Product
-heatmap_data = df.groupby(["region", "product"]).size().reset_index(name="opportunities")
+heatmap_data = (
+    df.groupby(["region", "product"])
+    .agg(opportunities=("value", "count"), total_value=("value", "sum"))
+    .reset_index()
+)
+heatmap_data["pct"] = (heatmap_data["opportunities"] / heatmap_data["opportunities"].sum() * 100).round(1)
+_max_opp = heatmap_data["opportunities"].max()
+
 heatmap_chart = (
     alt.Chart(heatmap_data)
-    .mark_rect(cornerRadius=3)
+    .mark_rect(cornerRadius=2)
     .encode(
-        x=alt.X("product:N", title="", sort=PRODUCTS),
-        y=alt.Y("region:N", title="", sort=REGIONS),
+        x=alt.X("product:N", title="", sort=PRODUCTS, axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
+        y=alt.Y("region:N", title="", sort=REGIONS, axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
         color=alt.Color(
             "opportunities:Q",
-            scale=alt.Scale(scheme="blues"),
-            legend=alt.Legend(title="Opportunities"),
+            scale=alt.Scale(scheme="blues", domainMin=0),
+            legend=None,
         ),
-        tooltip=["region", "product", "opportunities"],
+        tooltip=[
+            alt.Tooltip("region:N", title="Region"),
+            alt.Tooltip("product:N", title="Product"),
+            alt.Tooltip("opportunities:Q", title="Opportunities"),
+            alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
+            alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
+        ],
     )
-    .properties(title="Heatmap: Region × Product", height=220)
+    .properties(title="Opportunities Heatmap: Region × Product", height=260)
 )
 
 text_layer = (
     alt.Chart(heatmap_data)
-    .mark_text(fontSize=13, fontWeight="bold")
+    .mark_text(fontSize=14, fontWeight="bold")
     .encode(
         x=alt.X("product:N", sort=PRODUCTS),
         y=alt.Y("region:N", sort=REGIONS),
         text=alt.Text("opportunities:Q"),
         color=alt.condition(
-            alt.datum.opportunities > heatmap_data["opportunities"].max() * 0.6,
+            alt.datum.opportunities > _max_opp * 0.55,
             alt.value("white"),
             alt.value("#0f2744"),
         ),
@@ -406,9 +419,20 @@ with ct_right:
     overdue_n = int(overdue["opportunities"].sum()) if not overdue.empty else 0
     week_n = int(this_week["opportunities"].sum()) if not this_week.empty else 0
 
-    r1, r2 = st.columns(2)
-    r1.metric("Overdue", f"{overdue_n:,}", delta=f"-${overdue_val:,.0f}", delta_color="inverse")
-    r2.metric("Closing This Week", f"{week_n:,}", delta=f"${week_val:,.0f}", delta_color="off")
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;margin-bottom:4px;">
+        <div style="flex:1;background:#fef2f2;border-left:4px solid #c0392b;border-radius:8px;padding:16px 20px;">
+            <p style="color:#9b2323;font-size:0.75rem;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Overdue</p>
+            <p style="color:#c0392b;font-size:2rem;font-weight:700;margin:6px 0 2px;">{overdue_n:,}</p>
+            <p style="color:#c0392b;font-size:0.85rem;margin:0;">${overdue_val:,.0f} at risk</p>
+        </div>
+        <div style="flex:1;background:#fff7ed;border-left:4px solid #e67e22;border-radius:8px;padding:16px 20px;">
+            <p style="color:#92400e;font-size:0.75rem;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Closing This Week</p>
+            <p style="color:#e67e22;font-size:2rem;font-weight:700;margin:6px 0 2px;">{week_n:,}</p>
+            <p style="color:#e67e22;font-size:0.85rem;margin:0;">${week_val:,.0f} pipeline</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.divider()
     st.dataframe(
         bucket_agg.rename(columns={
