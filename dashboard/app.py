@@ -350,7 +350,7 @@ heatmap_chart = (
         color=alt.Color(
             "opportunities:Q",
             scale=alt.Scale(
-                range=["#4a9eed", "#f0f5fb", "#c0392b"],
+                range=["#2166ac", "#92c5de", "#f7f7f7", "#f4a582", "#d6191b"],
                 domainMid=heatmap_data["opportunities"].mean(),
             ),
             legend=alt.Legend(title="Opps", orient="right"),
