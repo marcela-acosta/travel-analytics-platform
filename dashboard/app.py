@@ -344,10 +344,8 @@ heatmap_chart = (
     .mark_rect(stroke="white", strokeWidth=3)
     .encode(
         x=alt.X("product:N", title="", sort=PRODUCTS,
-                scale=alt.Scale(step=CELL),
                 axis=alt.Axis(labelAngle=-30, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
         y=alt.Y("region:N", title="", sort=REGIONS,
-                scale=alt.Scale(step=CELL),
                 axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=6)),
         color=alt.Color(
             "opportunities:Q",
@@ -362,15 +360,19 @@ heatmap_chart = (
             alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
         ],
     )
-    .properties(title="Opportunities Heatmap: Region × Product")
+    .properties(
+        title="Opportunities Heatmap: Region × Product",
+        width=alt.Step(CELL),
+        height=alt.Step(CELL),
+    )
 )
 
 text_layer = (
     alt.Chart(heatmap_data)
     .mark_text(fontSize=16, fontWeight="bold")
     .encode(
-        x=alt.X("product:N", sort=PRODUCTS, scale=alt.Scale(step=CELL)),
-        y=alt.Y("region:N", sort=REGIONS, scale=alt.Scale(step=CELL)),
+        x=alt.X("product:N", sort=PRODUCTS),
+        y=alt.Y("region:N", sort=REGIONS),
         text=alt.Text("opportunities:Q"),
         color=alt.condition(
             alt.datum.opportunities > _max_opp * 0.55,
@@ -378,6 +380,7 @@ text_layer = (
             alt.value("#0f2744"),
         ),
     )
+    .properties(width=alt.Step(CELL), height=alt.Step(CELL))
 )
 
 col_hm = st.columns([1, 3, 1])
