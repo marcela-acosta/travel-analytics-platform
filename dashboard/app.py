@@ -21,9 +21,18 @@ STAGE_COUNTS = {
     "Lost": 22,
 }
 
-BLUE_PALETTE = ["#1a3d6e", "#1e5fa8", "#2e7dd1", "#4a9eed", "#7ab8f5", "#a8d4f5"]
+STAGE_WIN_PROB = {
+    "Prospecting": 0.10,
+    "Qualified": 0.25,
+    "Proposal": 0.45,
+    "Negotiation": 0.70,
+    "Won": 1.00,
+    "Lost": 0.00,
+}
+
+CLOSE_BUCKET_ORDER = ["Overdue", "This Week", "This Month", "Later"]
+
 PRIMARY = "#1e5fa8"
-LIGHT_BG = "#f0f5fb"
 
 
 def get_mock_data() -> pd.DataFrame:
@@ -71,6 +80,16 @@ def load_data() -> pd.DataFrame:
     return df.sort_values("stage").reset_index(drop=True)
 
 
+def close_bucket(days: int) -> str:
+    if days < 0:
+        return "Overdue"
+    if days <= 7:
+        return "This Week"
+    if days <= 30:
+        return "This Month"
+    return "Later"
+
+
 def hbar(df: pd.DataFrame, x: str, y: str, title: str = "", height: int = 280) -> alt.Chart:
     return (
         alt.Chart(df)
@@ -109,23 +128,16 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #0f2744;
-    }
+    [data-testid="stSidebar"] { background-color: #0f2744; }
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] span {
-        color: #d6e4f7 !important;
-    }
+    [data-testid="stSidebar"] span { color: #d6e4f7 !important; }
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: #8aafd4 !important;
-        font-size: 0.8rem;
+        color: #8aafd4 !important; font-size: 0.8rem;
     }
-    /* KPI cards */
     [data-testid="stMetric"] {
         background-color: #f0f5fb;
         border-left: 4px solid #1e5fa8;
@@ -134,16 +146,9 @@ st.markdown(
     }
     [data-testid="stMetricLabel"] { color: #4a6b8a; font-size: 0.85rem; }
     [data-testid="stMetricValue"] { color: #0f2744; font-weight: 700; }
-    /* Multiselect tags */
-    [data-baseweb="tag"] {
-        background-color: #1e5fa8 !important;
-    }
-    [data-baseweb="tag"] span {
-        color: #ffffff !important;
-    }
-    /* Section headers */
+    [data-baseweb="tag"] { background-color: #1e5fa8 !important; }
+    [data-baseweb="tag"] span { color: #ffffff !important; }
     h2 { color: #0f2744 !important; border-bottom: 2px solid #e0ebf8; padding-bottom: 6px; }
-    /* Divider */
     hr { border-color: #e0ebf8; }
     </style>
     """,
@@ -182,6 +187,12 @@ if df.empty:
     st.error("No data matches the selected filters.")
     st.stop()
 
+# Derived columns
+df["win_prob"] = df["stage"].map(STAGE_WIN_PROB).fillna(0)
+df["weighted_value"] = df["value"] * df["win_prob"]
+df["close_bucket"] = df["days_until_expected_close"].apply(close_bucket)
+df["close_bucket"] = pd.Categorical(df["close_bucket"], categories=CLOSE_BUCKET_ORDER, ordered=True)
+
 # ── KPIs ──────────────────────────────────────────────────────────────────────
 won_opps = len(df[df["stage"] == "Won"])
 lost_opps = len(df[df["stage"] == "Lost"])
@@ -190,13 +201,15 @@ win_rate = (won_opps / closed * 100) if closed > 0 else 0
 avg_deal = df[df["stage"] == "Won"]["value"].mean() if won_opps > 0 else 0
 stale_count = int(df["is_stale"].sum())
 stale_pct = round(stale_count / len(df) * 100, 1) if len(df) > 0 else 0
+weighted_total = df["weighted_value"].sum()
 
-k1, k2, k3, k4, k5 = st.columns(5)
+k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Total Opportunities", f"{len(df):,}")
 k2.metric("Pipeline Value", f"${df['value'].sum():,.0f}")
-k3.metric("Win Rate", f"{win_rate:.1f}%")
-k4.metric("Avg Won Deal", f"${avg_deal:,.0f}")
-k5.metric("Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse")
+k3.metric("Weighted Forecast", f"${weighted_total:,.0f}")
+k4.metric("Win Rate", f"{win_rate:.1f}%")
+k5.metric("Avg Won Deal", f"${avg_deal:,.0f}")
+k6.metric("Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse")
 
 st.divider()
 
@@ -208,6 +221,7 @@ stage_agg = (
     .agg(
         total_opportunities=("value", "count"),
         total_value=("value", "sum"),
+        weighted_value=("weighted_value", "sum"),
         stale_opportunities=("is_stale", "sum"),
         avg_days_since_update=("days_since_update", "mean"),
     )
@@ -247,7 +261,51 @@ st.dataframe(pd.DataFrame(conversion_rows), use_container_width=True, hide_index
 
 st.divider()
 
-# ── Regional breakdown + Product mix ─────────────────────────────────────────
+# ── Weighted forecast ─────────────────────────────────────────────────────────
+st.subheader("Weighted Revenue Forecast")
+
+forecast_data = stage_agg[stage_agg["stage"] != "Lost"][["stage", "total_value", "weighted_value"]].copy()
+forecast_melted = forecast_data.melt(
+    id_vars="stage",
+    value_vars=["total_value", "weighted_value"],
+    var_name="type",
+    value_name="amount",
+)
+forecast_melted["type"] = forecast_melted["type"].map(
+    {"total_value": "Total Pipeline", "weighted_value": "Weighted Forecast"}
+)
+
+forecast_chart = (
+    alt.Chart(forecast_melted)
+    .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+    .encode(
+        x=alt.X("stage:N", sort=STAGE_ORDER, title=""),
+        y=alt.Y("amount:Q", title="$ Value"),
+        color=alt.Color(
+            "type:N",
+            scale=alt.Scale(domain=["Total Pipeline", "Weighted Forecast"], range=["#a8d4f5", PRIMARY]),
+            legend=alt.Legend(orient="top-right", title=""),
+        ),
+        xOffset="type:N",
+        tooltip=["stage", "type", alt.Tooltip("amount:Q", format="$,.0f")],
+    )
+    .properties(height=300)
+)
+
+fc_left, fc_right = st.columns([2, 1])
+with fc_left:
+    st.altair_chart(forecast_chart, use_container_width=True)
+with fc_right:
+    st.markdown("**Win probability by stage**")
+    prob_df = pd.DataFrame(
+        [{"Stage": s, "Win Prob": f"{int(p*100)}%"} for s, p in STAGE_WIN_PROB.items() if s not in ("Won", "Lost")]
+    )
+    st.dataframe(prob_df, use_container_width=True, hide_index=True)
+    st.caption("Weighted Forecast = Pipeline Value × Win Probability per stage")
+
+st.divider()
+
+# ── Regional breakdown + Product mix + Heatmap ───────────────────────────────
 st.subheader("Regional Breakdown & Product Mix")
 
 reg_col, prod_col = st.columns(2)
@@ -269,6 +327,99 @@ with prod_col:
         .sort_values("total_opportunities", ascending=False)
     )
     st.altair_chart(hbar(product_agg, "total_opportunities", "product", title="Opportunities by Product"), use_container_width=True)
+
+# Heatmap Region × Product
+heatmap_data = df.groupby(["region", "product"]).size().reset_index(name="opportunities")
+heatmap_chart = (
+    alt.Chart(heatmap_data)
+    .mark_rect(cornerRadius=3)
+    .encode(
+        x=alt.X("product:N", title="", sort=PRODUCTS),
+        y=alt.Y("region:N", title="", sort=REGIONS),
+        color=alt.Color(
+            "opportunities:Q",
+            scale=alt.Scale(scheme="blues"),
+            legend=alt.Legend(title="Opportunities"),
+        ),
+        tooltip=["region", "product", "opportunities"],
+    )
+    .properties(title="Heatmap: Region × Product", height=220)
+)
+
+text_layer = (
+    alt.Chart(heatmap_data)
+    .mark_text(fontSize=13, fontWeight="bold")
+    .encode(
+        x=alt.X("product:N", sort=PRODUCTS),
+        y=alt.Y("region:N", sort=REGIONS),
+        text=alt.Text("opportunities:Q"),
+        color=alt.condition(
+            alt.datum.opportunities > heatmap_data["opportunities"].max() * 0.6,
+            alt.value("white"),
+            alt.value("#0f2744"),
+        ),
+    )
+)
+
+st.altair_chart(heatmap_chart + text_layer, use_container_width=True)
+
+st.divider()
+
+# ── Closing timeline ──────────────────────────────────────────────────────────
+st.subheader("Closing Timeline")
+
+bucket_agg = (
+    df[df["stage"].isin(["Prospecting", "Qualified", "Proposal", "Negotiation"])]
+    .groupby("close_bucket", observed=True)
+    .agg(opportunities=("value", "count"), pipeline_value=("value", "sum"), weighted_value=("weighted_value", "sum"))
+    .reset_index()
+)
+bucket_agg["close_bucket"] = bucket_agg["close_bucket"].astype(str)
+
+BUCKET_COLORS = {"Overdue": "#c0392b", "This Week": "#e67e22", "This Month": PRIMARY, "Later": "#7ab8f5"}
+
+ct_left, ct_right = st.columns([1, 1])
+with ct_left:
+    bucket_chart = (
+        alt.Chart(bucket_agg)
+        .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X("close_bucket:N", sort=CLOSE_BUCKET_ORDER, title=""),
+            y=alt.Y("opportunities:Q", title="Opportunities"),
+            color=alt.Color(
+                "close_bucket:N",
+                scale=alt.Scale(domain=list(BUCKET_COLORS.keys()), range=list(BUCKET_COLORS.values())),
+                legend=None,
+            ),
+            tooltip=["close_bucket", "opportunities", alt.Tooltip("pipeline_value:Q", format="$,.0f")],
+        )
+        .properties(title="Open Opportunities by Expected Close", height=280)
+    )
+    st.altair_chart(bucket_chart, use_container_width=True)
+
+with ct_right:
+    st.markdown("**Pipeline at risk**")
+    overdue = bucket_agg[bucket_agg["close_bucket"] == "Overdue"]
+    this_week = bucket_agg[bucket_agg["close_bucket"] == "This Week"]
+    overdue_val = overdue["pipeline_value"].sum() if not overdue.empty else 0
+    week_val = this_week["pipeline_value"].sum() if not this_week.empty else 0
+    overdue_n = int(overdue["opportunities"].sum()) if not overdue.empty else 0
+    week_n = int(this_week["opportunities"].sum()) if not this_week.empty else 0
+
+    r1, r2 = st.columns(2)
+    r1.metric("Overdue", f"{overdue_n:,}", delta=f"-${overdue_val:,.0f}", delta_color="inverse")
+    r2.metric("Closing This Week", f"{week_n:,}", delta=f"${week_val:,.0f}", delta_color="off")
+    st.divider()
+    st.dataframe(
+        bucket_agg.rename(columns={
+            "close_bucket": "Bucket",
+            "opportunities": "Opps",
+            "pipeline_value": "Pipeline Value",
+            "weighted_value": "Weighted",
+        }).style.format({"Pipeline Value": "${:,.0f}", "Weighted": "${:,.0f}"}),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 st.divider()
 
@@ -335,6 +486,7 @@ with st.expander("Stage Breakdown Table"):
         stage_agg.style.format(
             {
                 "total_value": "${:,.0f}",
+                "weighted_value": "${:,.0f}",
                 "total_opportunities": "{:,}",
                 "stale_opportunities": "{:,}",
                 "avg_days_since_update": "{:.1f}",
