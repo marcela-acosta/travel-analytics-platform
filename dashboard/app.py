@@ -388,7 +388,7 @@ with ct_left:
     )
     bucket_labels = (
         alt.Chart(bucket_agg)
-        .mark_text(dy=-8, fontSize=13, fontWeight="bold", color="#0f2744")
+        .mark_text(dy=-8, fontSize=13, fontWeight="bold", color="#ffffff")
         .encode(
             x=alt.X("close_bucket:N", sort=CLOSE_BUCKET_ORDER),
             y=alt.Y("opportunities:Q"),
