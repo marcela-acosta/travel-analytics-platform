@@ -175,7 +175,7 @@ for i in range(len(funnel_data) - 1):
     conv_labels.append({
         "stage": funnel_data.iloc[i+1]["stage"],
         "label": f"↓ {rate}%",
-        "total_opportunities": curr,
+        "label_x": nxt * 0.55,  # 55% inside the destination bar
     })
 conv_df = pd.DataFrame(conv_labels)
 
@@ -217,10 +217,10 @@ funnel_labels = (
 
 conv_text = (
     alt.Chart(conv_df)
-    .mark_text(align="right", dx=-8, fontSize=11, color="#ffffff", fontWeight="bold")
+    .mark_text(align="center", fontSize=11, color="#ffffff", fontWeight="bold")
     .encode(
         y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
-        x=alt.X("total_opportunities:Q"),
+        x=alt.X("label_x:Q"),
         text=alt.Text("label:N"),
     )
 )
