@@ -328,81 +328,53 @@ with prod_col:
     )
     st.altair_chart(hbar(product_agg, "total_opportunities", "product", title="Opportunities by Product"), use_container_width=True)
 
-# Heatmap Region × Product
-heatmap_data = (
+# Stacked bar: Product mix per Region
+mix_data = (
     df.groupby(["region", "product"])
     .agg(opportunities=("value", "count"), total_value=("value", "sum"))
     .reset_index()
 )
-heatmap_data["pct"] = (heatmap_data["opportunities"] / heatmap_data["opportunities"].sum() * 100).round(1)
-_max_opp = heatmap_data["opportunities"].max()
 
-CELL = 110
+PRODUCT_COLORS = {
+    "Flight":     "#1a3d6e",
+    "Hotel":      "#1e5fa8",
+    "Car Rental": "#4a9eed",
+    "Package 2x": "#f4a261",
+    "Package 3x": "#e76f51",
+}
 
-_base_enc = dict(
-    x=alt.X("product:N", title="", sort=PRODUCTS,
-             axis=alt.Axis(labelAngle=-20, labelFontSize=12, labelFontWeight="bold", labelPadding=8)),
-    y=alt.Y("region:N", title="", sort=REGIONS,
-             axis=alt.Axis(labelAngle=0, labelFontSize=12, labelFontWeight="bold", labelPadding=8)),
-)
-_tooltip = [
-    alt.Tooltip("region:N", title="Region"),
-    alt.Tooltip("product:N", title="Product"),
-    alt.Tooltip("opportunities:Q", title="Opportunities"),
-    alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
-    alt.Tooltip("pct:Q", title="% of Total", format=".1f"),
-]
-_step = dict(width=alt.Step(CELL), height=alt.Step(CELL))
-
-grid_layer = (
-    alt.Chart(heatmap_data)
-    .mark_rect(color="#f4f7fb", stroke="#dde6f0", strokeWidth=1)
-    .encode(**_base_enc)
-    .properties(**_step)
-)
-
-bubble_layer = (
-    alt.Chart(heatmap_data)
-    .mark_circle(opacity=0.88)
+stacked_bar = (
+    alt.Chart(mix_data)
+    .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
     .encode(
-        **_base_enc,
-        size=alt.Size(
-            "opportunities:Q",
-            scale=alt.Scale(range=[300, 5500]),
-            legend=None,
-        ),
+        x=alt.X("region:N", sort=REGIONS, title="",
+                axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
+        y=alt.Y("opportunities:Q", title="Opportunities",
+                axis=alt.Axis(labelFontSize=11)),
         color=alt.Color(
-            "opportunities:Q",
-            scale=alt.Scale(scheme="blues", domainMin=0),
-            legend=alt.Legend(title="Opps", orient="right", gradientLength=120),
+            "product:N",
+            sort=PRODUCTS,
+            scale=alt.Scale(
+                domain=list(PRODUCT_COLORS.keys()),
+                range=list(PRODUCT_COLORS.values()),
+            ),
+            legend=alt.Legend(title="Product", orient="right", labelFontSize=11),
         ),
-        tooltip=_tooltip,
+        order=alt.Order("product:N", sort="ascending"),
+        tooltip=[
+            alt.Tooltip("region:N", title="Region"),
+            alt.Tooltip("product:N", title="Product"),
+            alt.Tooltip("opportunities:Q", title="Opportunities"),
+            alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
+        ],
     )
-    .properties(**_step)
-)
-
-label_layer = (
-    alt.Chart(heatmap_data)
-    .mark_text(fontSize=13, fontWeight="bold")
-    .encode(
-        **_base_enc,
-        text=alt.Text("opportunities:Q"),
-        color=alt.condition(
-            alt.datum.opportunities > _max_opp * 0.65,
-            alt.value("white"),
-            alt.value("#0f2744"),
-        ),
+    .properties(
+        title=alt.TitleParams("Product Mix by Region", fontSize=14, fontWeight="bold", anchor="start"),
+        height=300,
     )
-    .properties(**_step)
 )
 
-heatmap_chart = (grid_layer + bubble_layer + label_layer).properties(
-    title=alt.TitleParams("Region × Product Opportunity Matrix", fontSize=14, fontWeight="bold", anchor="start")
-)
-
-col_hm = st.columns([1, 4, 1])
-with col_hm[1]:
-    st.altair_chart(heatmap_chart)
+st.altair_chart(stacked_bar, use_container_width=True)
 
 st.divider()
 
