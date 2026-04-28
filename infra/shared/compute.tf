@@ -39,6 +39,8 @@ resource "google_compute_instance" "shared_vm" {
   }
 
   metadata_startup_script = file("${path.module}/../../scripts/startup.sh")
+
+  allow_stopping_for_update = true
 }
 
 # Grant the VM's default service account read access to the GitHub deploy key secret.
