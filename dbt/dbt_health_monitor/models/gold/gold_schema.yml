@@ -24,9 +24,53 @@ models:
 
   - name: gld_conversion_by_agent
     description: Conversion and value metrics by sales agent.
+    columns:
+      - name: agent
+        tests:
+          - not_null
+          - unique
+      - name: total_opportunities
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: won_opportunities
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: win_rate_pct
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+          - dbt_utils.expression_is_true:
+              expression: "<= 100"
 
   - name: gld_conversion_by_product
     description: Conversion and value metrics by product.
+    columns:
+      - name: product
+        tests:
+          - not_null
+          - unique
+      - name: total_opportunities
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "> 0"
+      - name: won_opportunities
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: win_rate_pct
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+          - dbt_utils.expression_is_true:
+              expression: "<= 100"
 
   - name: gld_stale_opportunities
     description: Opportunities not updated in more than 14 days.

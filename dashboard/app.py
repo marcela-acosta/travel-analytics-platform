@@ -65,6 +65,74 @@ def load_data() -> pd.DataFrame:
     return df.sort_values("stage").reset_index(drop=True)
 
 
+def get_mock_conversion_by_agent() -> pd.DataFrame:
+    raw = get_mock_data()
+    won     = raw[raw["stage"] == "Won"].groupby("agent").size().reset_index(name="won_opportunities")
+    lost    = raw[raw["stage"] == "Lost"].groupby("agent").size().reset_index(name="lost_opportunities")
+    won_val = raw[raw["stage"] == "Won"].groupby("agent")["value"].sum().reset_index(name="won_value")
+    agg = (
+        raw.groupby("agent")
+        .agg(total_opportunities=("value", "count"), total_pipeline_value=("value", "sum"))
+        .reset_index()
+    )
+    agg = (agg.merge(won, on="agent", how="left")
+               .merge(lost, on="agent", how="left")
+               .merge(won_val, on="agent", how="left"))
+    agg = agg.fillna({"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0})
+    agg[["won_opportunities", "lost_opportunities"]] = agg[["won_opportunities", "lost_opportunities"]].astype(int)
+    closed = agg["won_opportunities"] + agg["lost_opportunities"]
+    agg["win_rate_pct"] = (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).round(2).fillna(0.0).infer_objects(copy=False)
+    return agg
+
+
+def get_mock_conversion_by_product() -> pd.DataFrame:
+    raw = get_mock_data()
+    won     = raw[raw["stage"] == "Won"].groupby("product").size().reset_index(name="won_opportunities")
+    lost    = raw[raw["stage"] == "Lost"].groupby("product").size().reset_index(name="lost_opportunities")
+    won_val = raw[raw["stage"] == "Won"].groupby("product")["value"].sum().reset_index(name="won_value")
+    agg = (
+        raw.groupby("product")
+        .agg(total_opportunities=("value", "count"), total_pipeline_value=("value", "sum"))
+        .reset_index()
+    )
+    agg = (agg.merge(won, on="product", how="left")
+               .merge(lost, on="product", how="left")
+               .merge(won_val, on="product", how="left"))
+    agg = agg.fillna({"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0})
+    agg[["won_opportunities", "lost_opportunities"]] = agg[["won_opportunities", "lost_opportunities"]].astype(int)
+    closed = agg["won_opportunities"] + agg["lost_opportunities"]
+    agg["win_rate_pct"] = (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).round(2).fillna(0.0).infer_objects(copy=False)
+    return agg
+
+
+@st.cache_data(ttl=60)
+def load_conversion_by_agent() -> pd.DataFrame:
+    if USE_MOCK:
+        return get_mock_conversion_by_agent()
+    from google.cloud import bigquery
+    project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
+    client = bigquery.Client()
+    return client.query(f"""
+        SELECT agent, total_opportunities, won_opportunities, lost_opportunities,
+               win_rate_pct, total_pipeline_value, won_value
+        FROM `{project_id}.gold.gld_conversion_by_agent`
+    """).to_dataframe()
+
+
+@st.cache_data(ttl=60)
+def load_conversion_by_product() -> pd.DataFrame:
+    if USE_MOCK:
+        return get_mock_conversion_by_product()
+    from google.cloud import bigquery
+    project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
+    client = bigquery.Client()
+    return client.query(f"""
+        SELECT product, total_opportunities, won_opportunities, lost_opportunities,
+               win_rate_pct, total_pipeline_value, won_value
+        FROM `{project_id}.gold.gld_conversion_by_product`
+    """).to_dataframe()
+
+
 def close_bucket(days: int) -> str:
     if days < 0:     return "Overdue"
     if days <= 7:    return "This Week"
@@ -478,6 +546,35 @@ lollipop = (lollipop_stem + lollipop_dot + lollipop_labels).properties(
     height=320,
 )
 st.altair_chart(lollipop, use_container_width=True)
+
+st.divider()
+
+# ── Conversion tables ─────────────────────────────────────────────────────────
+st.subheader("Conversión por Agente y Producto")
+
+conv_agents   = load_conversion_by_agent().sort_values("win_rate_pct", ascending=False)
+conv_products = load_conversion_by_product().sort_values("win_rate_pct", ascending=False)
+
+def _highlight_low_conversion(val):
+    return "background-color: #ffcccc" if isinstance(val, float) and val < 20 else ""
+
+cv_left, cv_right = st.columns(2)
+with cv_left:
+    st.markdown("**Conversión por Agente**")
+    st.dataframe(
+        conv_agents.style
+        .applymap(_highlight_low_conversion, subset=["win_rate_pct"])
+        .format({"win_rate_pct": "{:.2f}%", "total_pipeline_value": "${:,.0f}", "won_value": "${:,.0f}"}),
+        use_container_width=True, hide_index=True,
+    )
+with cv_right:
+    st.markdown("**Conversión por Producto**")
+    st.dataframe(
+        conv_products.style
+        .applymap(_highlight_low_conversion, subset=["win_rate_pct"])
+        .format({"win_rate_pct": "{:.2f}%", "total_pipeline_value": "${:,.0f}", "won_value": "${:,.0f}"}),
+        use_container_width=True, hide_index=True,
+    )
 
 st.divider()
 
