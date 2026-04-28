@@ -12,7 +12,7 @@ data "google_compute_default_service_account" "default" {}
 
 resource "google_compute_instance" "shared_vm" {
   name         = "team-vm"
-  machine_type = "e2-medium"
+  machine_type = "e2-standard-8"
   zone         = local.zone
 
   boot_disk {
