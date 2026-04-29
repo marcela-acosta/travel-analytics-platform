@@ -28,3 +28,33 @@ sources:
         description: Raw search events from source systems.
       - name: support_events
         description: Raw support events from source systems.
+      - name: agency_events
+        description: Raw agency events from source systems.
+      - name: baggage_events
+        description: Raw baggage events from source systems.
+      - name: device_events
+        description: Raw device events from source systems.
+      - name: fraud_events
+        description: Raw fraud events from source systems.
+      - name: insurance_events
+        description: Raw insurance events from source systems.
+      - name: invoice_events
+        description: Raw invoice events from source systems.
+      - name: itinerary_events
+        description: Raw itinerary events from source systems.
+      - name: location_events
+        description: Raw location events from source systems.
+      - name: loyalty_events
+        description: Raw loyalty events from source systems.
+      - name: notification_events
+        description: Raw notification events from source systems.
+      - name: partner_events
+        description: Raw partner events from source systems.
+      - name: promo_events
+        description: Raw promo events from source systems.
+      - name: refund_events
+        description: Raw refund events from source systems.
+      - name: seat_events
+        description: Raw seat events from source systems.
+      - name: session_events
+        description: Raw session events from source systems.

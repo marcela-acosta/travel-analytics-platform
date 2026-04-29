@@ -132,3 +132,183 @@ models:
         description: Timestamp when the staging transformation was evaluated.
         tests:
           - not_null
+
+  - name: stg_agency_events
+    description: Staging view for agency events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_baggage_events
+    description: Staging view for baggage events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_device_events
+    description: Staging view for device events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_fraud_events
+    description: Staging view for fraud events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_insurance_events
+    description: Staging view for insurance events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_invoice_events
+    description: Staging view for invoice events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_itinerary_events
+    description: Staging view for itinerary events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_location_events
+    description: Staging view for location events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_loyalty_events
+    description: Staging view for loyalty events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_notification_events
+    description: Staging view for notification events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_partner_events
+    description: Staging view for partner events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_promo_events
+    description: Staging view for promo events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_refund_events
+    description: Staging view for refund events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_seat_events
+    description: Staging view for seat events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
+
+  - name: stg_session_events
+    description: Staging view for session events loaded from the bronze dataset.
+    columns:
+      - name: row_hash
+        description: Row hash generated from the full source record.
+        tests:
+          - not_null
+      - name: staged_at
+        description: Timestamp when the staging transformation was evaluated.
+        tests:
+          - not_null
