@@ -1,62 +1,6 @@
-# ---------------------------------------------------------------------------
-# Terraform
-# ---------------------------------------------------------------------------
-**/.terraform/
-*.tfstate
-*.tfstate.*
-*.tfstate.backup
-crash.log
-crash.*.log
-*.tfvars
-*.tfvars.json
-!example.tfvars
-!example.tfvars.json
-*tfplan*
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-.terraformrc
-terraform.rc
-
-# ---------------------------------------------------------------------------
-# Cloud credentials / secrets
-# ---------------------------------------------------------------------------
-infra/keys/
-*.json.key
-service-account-*.json
-credentials.json
-gcp-key.json
-application_default_credentials.json
-.env
-.env.*
-!.env.example
-
-# ---------------------------------------------------------------------------
-# Airflow (Local execution leftovers)
-# ---------------------------------------------------------------------------
-airflow/logs/
-airflow/plugins/
-airflow/postgres-data/
-
-# ---------------------------------------------------------------------------
-# OS / editor clutter
-# ---------------------------------------------------------------------------
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-*.swo
-.venv/
-key.json
-
-# ---------------------------------------------------------------------------
-# Python
-# ---------------------------------------------------------------------------
+*.log
+logs/
+bronze/*.log
+bronze/logs/
+beam-venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.ruff_cache/
