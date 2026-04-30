@@ -7,8 +7,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -17,11 +16,11 @@ USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
 _DBT_PATH = Path(__file__).parent.parent / "dbt" / "dbt_health_monitor"
 
 
-def _get_client() -> genai.Client:
-    api_key = os.environ.get("GEMINI_API_KEY")
+def _get_client() -> OpenAI:
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set — add it to your .env file")
-    return genai.Client(api_key=api_key)
+        raise ValueError("OPENAI_API_KEY not set — add it to your .env file")
+    return OpenAI(api_key=api_key)
 
 
 def _dbt_context() -> str:
@@ -39,56 +38,66 @@ def _dbt_context() -> str:
 
 def _system_prompt() -> str:
     mode_note = (
-        "Running in MOCK mode with sample data - only gld_dashboard_opportunities is available."
+        "MOCK mode: only gld_dashboard_opportunities is available (no other tables). "
+        "Always query gld_dashboard_opportunities."
         if USE_MOCK
-        else "Connected to live BigQuery."
+        else "Connected to live BigQuery. All gold tables are available."
     )
     return f"""You are a sales pipeline analyst for a travel company. {mode_note}
 
-Available dbt gold tables in BigQuery:
-{_dbt_context()}
+Available dbt gold table columns in gld_dashboard_opportunities:
+opportunity_id, stage, region, product, agent, value,
+days_since_update, days_until_expected_close, is_stale
 
-Business context:
-- Pipeline stages (in order): Prospecting -> Qualified -> Proposal -> Negotiation -> Won / Lost
-- Regions: CDMX, GDL, MTY, CUN, TIJ
-- Products: Flight, Hotel, Car Rental, Package 2x, Package 3x
-- Win probabilities by stage: Prospecting 10%, Qualified 25%, Proposal 45%, Negotiation 70%, Won 100%
-- Stale opportunity = not updated in more than 14 days
-- Weighted Forecast = pipeline value x win probability
+Key definitions (use these exact SQL conditions):
+- OVERDUE deal: days_until_expected_close < 0
+- STALE deal: days_since_update > 14  (or is_stale = 1)
+- Closing this week: days_until_expected_close BETWEEN 0 AND 7
+- Closing this month: days_until_expected_close BETWEEN 0 AND 30
 
-When answering questions about the data, use the run_query tool with fully-qualified table names:
-  `{PROJECT_ID}.gold.<model_name>`
+Pipeline stages: Prospecting, Qualified, Proposal, Negotiation, Won, Lost
+Regions: CDMX, GDL, MTY, CUN, TIJ
+Products: Flight, Hotel, Car Rental, Package 2x, Package 3x
+Win probabilities: Prospecting 10%, Qualified 25%, Proposal 45%, Negotiation 70%, Won 100%
 
-Keep SQL simple and efficient. Summarize results in clear, business-friendly language. Be concise."""
+ALWAYS use run_query to answer data questions. Use table name:
+  `{PROJECT_ID}.gold.gld_dashboard_opportunities`
+
+When computing rates or percentages in SQL, always use CAST(numerator AS FLOAT) to avoid integer division.
+Be concise and business-friendly in your answers."""
 
 
-_TOOL = types.Tool(
-    function_declarations=[
-        types.FunctionDeclaration(
-            name="run_query",
-            description="Execute a SQL query against BigQuery and return the results as JSON.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "sql": types.Schema(
-                        type=types.Type.STRING,
-                        description="A valid BigQuery SQL query using fully-qualified table names.",
-                    )
-                },
-                required=["sql"],
-            ),
-        )
-    ]
-)
+_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "run_query",
+        "description": "Execute a SQL query and return the results as JSON.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sql": {
+                    "type": "string",
+                    "description": "A BigQuery SQL query using fully-qualified table names.",
+                }
+            },
+            "required": ["sql"],
+        },
+    },
+}
 
 
 def _execute(sql: str, mock_df) -> str:
     if USE_MOCK and mock_df is not None:
         clean = re.sub(r'`[^`]*\.(gld_\w+)`', r'\1', sql)
         clean = re.sub(r'`', '', clean)
+        # Normalize booleans for SQLite
+        clean = re.sub(r'\bTRUE\b', '1', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'\bFALSE\b', '0', clean, flags=re.IGNORECASE)
         conn = sqlite3.connect(":memory:")
         try:
-            mock_df.to_sql("gld_dashboard_opportunities", conn, index=False, if_exists="replace")
+            df = mock_df.copy()
+            df["stage"] = df["stage"].astype(str)
+            df.to_sql("gld_dashboard_opportunities", conn, index=False, if_exists="replace")
             result = pd.read_sql(clean, conn)
             return result.to_json(orient="records", indent=2)
         except Exception as e:
@@ -104,47 +113,40 @@ def _execute(sql: str, mock_df) -> str:
 
 
 def chat(user_message: str, history: list, mock_df=None) -> str:
-    """Send a message to the Gemini agent and return its reply.
+    """Send a message to the OpenAI agent and return its reply.
 
     history: list of {"role": "user"|"assistant", "content": "..."}.
     """
     client = _get_client()
 
-    contents = []
+    messages = [{"role": "system", "content": _system_prompt()}]
     for msg in history:
-        role = "user" if msg["role"] == "user" else "model"
-        contents.append(types.Content(role=role, parts=[types.Part.from_text(msg["content"])]))
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(user_message)]))
+        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": user_message})
 
-    config = types.GenerateContentConfig(
-        system_instruction=_system_prompt(),
-        tools=[_TOOL],
-        temperature=0.1,
-    )
-
-    for _ in range(5):
-        response = client.models.generate_content(
-            model="gemini-2.0-flash", contents=contents, config=config
+    for i in range(6):
+        # Force tool use on the first call so the model always queries data
+        tool_choice = "required" if i == 0 else "auto"
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=[_TOOL],
+            tool_choice=tool_choice,
+            temperature=0.1,
         )
-        candidate = response.candidates[0]
-        fn_call = next(
-            (p.function_call for p in candidate.content.parts if p.function_call), None
-        )
-        if fn_call is None:
-            break
+        msg = response.choices[0].message
 
-        query_result = _execute(fn_call.args["sql"], mock_df)
-        contents.append(candidate.content)
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_function_response(
-                        name=fn_call.name, response={"result": query_result}
-                    )
-                ],
-            )
-        )
+        if not msg.tool_calls:
+            return msg.content or "No response generated."
 
-    text_parts = [p.text for p in response.candidates[0].content.parts if p.text]
-    return "\n".join(text_parts) if text_parts else "No response generated."
+        messages.append(msg)
+        for tc in msg.tool_calls:
+            args = json.loads(tc.function.arguments)
+            result = _execute(args["sql"], mock_df)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result,
+            })
+
+    return msg.content or "No response generated."
