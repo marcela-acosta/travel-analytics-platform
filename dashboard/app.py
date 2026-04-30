@@ -148,9 +148,7 @@ def close_bucket(days: int) -> str:
 def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     from fpdf import FPDF
     from datetime import datetime as _dtnow
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    import plotly.graph_objects as go
     from io import BytesIO as _BIO
 
     # Palette
@@ -269,96 +267,109 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
         pdf.ln(3)
 
     # ── Chart helpers ─────────────────────────────────────────────────────
-    def _fig_to_buf(fig) -> _BIO:
-        buf = _BIO()
-        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-        plt.close(fig)
-        buf.seek(0)
-        return buf
+    _PLOTLY_BASE = dict(
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        font=dict(family="Arial"),
+    )
 
     def _chart_funnel() -> _BIO:
         order = ["Prospecting", "Qualified", "Proposal", "Negotiation", "Won"]
         colors = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981"]
         data = (stage_snap[stage_snap["stage"].isin(order)]
                 .set_index("stage").reindex(order[::-1]))
-        fig, ax = plt.subplots(figsize=(7.2, 2.6))
-        fig.patch.set_facecolor("white")
-        ax.set_facecolor("white")
-        bars = ax.barh(data.index, data["total_opportunities"],
-                       color=colors[::-1], height=0.55)
-        for bar in bars:
-            v = bar.get_width()
-            ax.text(max(v - 3, 1), bar.get_y() + bar.get_height() / 2,
-                    f"{int(v):,}", va="center", ha="right",
-                    color="white", fontsize=8, fontweight="bold")
-        ax.set_xlabel("Opportunities", fontsize=8, color="#4a6b8a")
-        for sp in ("top", "right", "left"):
-            ax.spines[sp].set_visible(False)
-        ax.spines["bottom"].set_color("#e0ebf8")
-        ax.tick_params(axis="y", labelsize=9, colors="#0f2744")
-        ax.tick_params(axis="x", labelsize=7, colors="#4a6b8a")
-        ax.grid(axis="x", alpha=0.25, linestyle="--", color="#c8ddf5")
-        plt.tight_layout(pad=0.4)
-        return _fig_to_buf(fig)
+        vals = data["total_opportunities"].tolist()
+        fig = go.Figure(go.Bar(
+            y=list(data.index), x=vals, orientation="h",
+            marker_color=colors[::-1],
+            text=[f"  {int(v):,}" for v in vals],
+            textposition="inside",
+            insidetextanchor="end",
+            textfont=dict(color="white", size=12, family="Arial Black"),
+            hovertemplate="%{y}: %{x:,}<extra></extra>",
+        ))
+        fig.update_layout(
+            **_PLOTLY_BASE,
+            margin=dict(l=10, r=20, t=10, b=30),
+            width=1100, height=260,
+            xaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
+                       tickfont=dict(size=10, color="#4a6b8a"),
+                       title_font=dict(size=10, color="#4a6b8a")),
+            yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
+        )
+        buf = _BIO(fig.to_image(format="png", scale=1.5))
+        buf.seek(0)
+        return buf
 
     def _chart_closing() -> _BIO:
-        df_snap["close_bucket"] = df_snap["days_until_expected_close"].apply(close_bucket)
-        bucket_counts = (df_snap[df_snap["stage"].isin(
+        df_c = df_snap.copy()
+        df_c["close_bucket"] = df_c["days_until_expected_close"].apply(close_bucket)
+        bucket_counts = (df_c[df_c["stage"].isin(
             ["Prospecting", "Qualified", "Proposal", "Negotiation"])]
             .groupby("close_bucket")["value"].count()
             .reindex(CLOSE_BUCKET_ORDER, fill_value=0))
         bcolors = {"Overdue": "#c0392b", "This Week": "#e67e22",
                    "This Month": "#1e5fa8", "Later": "#7ab8f5"}
-        fig, ax = plt.subplots(figsize=(3.4, 2.6))
-        fig.patch.set_facecolor("white")
-        ax.set_facecolor("white")
-        bars = ax.bar(bucket_counts.index,
-                      bucket_counts.values,
-                      color=[bcolors[b] for b in bucket_counts.index],
-                      width=0.55)
-        for bar in bars:
-            v = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.5,
-                    str(int(v)), ha="center", va="bottom",
-                    fontsize=8, fontweight="bold", color="#0f2744")
-        ax.set_title("Closing Timeline", fontsize=9, color="#0f2744",
-                     fontweight="bold", pad=6)
-        for sp in ("top", "right", "left"):
-            ax.spines[sp].set_visible(False)
-        ax.spines["bottom"].set_color("#e0ebf8")
-        ax.tick_params(axis="x", labelsize=8, colors="#4a6b8a")
-        ax.tick_params(axis="y", labelsize=7, colors="#4a6b8a")
-        ax.grid(axis="y", alpha=0.25, linestyle="--", color="#c8ddf5")
-        plt.tight_layout(pad=0.4)
-        return _fig_to_buf(fig)
+        vals = bucket_counts.values.tolist()
+        fig = go.Figure(go.Bar(
+            x=list(bucket_counts.index), y=vals,
+            marker_color=[bcolors[b] for b in bucket_counts.index],
+            text=[str(int(v)) for v in vals],
+            textposition="outside",
+            textfont=dict(color="#0f2744", size=13, family="Arial Black"),
+            hovertemplate="%{x}: %{y:,}<extra></extra>",
+        ))
+        fig.update_layout(
+            **_PLOTLY_BASE,
+            title=dict(text="Closing Timeline",
+                       font=dict(size=12, color="#0f2744", family="Arial Black"), x=0.5),
+            margin=dict(l=10, r=10, t=44, b=10),
+            width=570, height=300,
+            xaxis=dict(tickfont=dict(size=12, color="#4a6b8a"), showgrid=False, showline=False),
+            yaxis=dict(gridcolor="#e0ebf8", showline=False,
+                       tickfont=dict(size=9, color="#4a6b8a"),
+                       range=[0, max(vals) * 1.2 + 1]),
+        )
+        buf = _BIO(fig.to_image(format="png", scale=1.5))
+        buf.seek(0)
+        return buf
 
     def _chart_agent_winrate() -> _BIO:
         top = agent_snap.sort_values("win_rate_pct", ascending=False).head(10)
         vals = top["win_rate_pct"].values
-        colors = ["#16a34a" if v >= 40 else "#ea580c" if v >= 20 else "#dc2626"
-                  for v in vals]
-        fig, ax = plt.subplots(figsize=(7.2, 2.8))
-        fig.patch.set_facecolor("white")
-        ax.set_facecolor("white")
-        bars = ax.barh(top["agent"].values[::-1], vals[::-1],
-                       color=colors[::-1], height=0.55)
-        for bar in bars:
-            v = bar.get_width()
-            ax.text(v + 0.5, bar.get_y() + bar.get_height() / 2,
-                    f"{v:.1f}%", va="center", ha="left",
-                    fontsize=7.5, color="#0f2744", fontweight="bold")
-        ax.set_xlabel("Win Rate (%)", fontsize=8, color="#4a6b8a")
-        ax.axvline(40, color="#16a34a", linewidth=0.8, linestyle="--", alpha=0.6)
-        ax.axvline(20, color="#ea580c", linewidth=0.8, linestyle="--", alpha=0.6)
-        ax.set_xlim(0, max(vals) * 1.2 + 5)
-        for sp in ("top", "right", "left"):
-            ax.spines[sp].set_visible(False)
-        ax.spines["bottom"].set_color("#e0ebf8")
-        ax.tick_params(axis="y", labelsize=9, colors="#0f2744")
-        ax.tick_params(axis="x", labelsize=7, colors="#4a6b8a")
-        ax.grid(axis="x", alpha=0.25, linestyle="--", color="#c8ddf5")
-        plt.tight_layout(pad=0.4)
-        return _fig_to_buf(fig)
+        bar_colors = ["#16a34a" if v >= 40 else "#ea580c" if v >= 20 else "#dc2626"
+                      for v in vals]
+        max_val = float(max(vals)) if len(vals) > 0 else 100
+        fig = go.Figure(go.Bar(
+            y=top["agent"].values[::-1].tolist(),
+            x=vals[::-1].tolist(),
+            orientation="h",
+            marker_color=bar_colors[::-1],
+            text=[f"{v:.1f}%" for v in vals[::-1]],
+            textposition="outside",
+            textfont=dict(color="#0f2744", size=11, family="Arial Black"),
+            hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+        ))
+        fig.add_vline(x=40, line_dash="dash", line_color="#16a34a",
+                      line_width=1.5, opacity=0.65,
+                      annotation_text="40%", annotation_position="top right",
+                      annotation_font=dict(size=9, color="#16a34a"))
+        fig.add_vline(x=20, line_dash="dash", line_color="#ea580c",
+                      line_width=1.5, opacity=0.65,
+                      annotation_text="20%", annotation_position="top right",
+                      annotation_font=dict(size=9, color="#ea580c"))
+        fig.update_layout(
+            **_PLOTLY_BASE,
+            margin=dict(l=10, r=70, t=10, b=30),
+            width=1100, height=320,
+            xaxis=dict(title="Win Rate (%)", range=[0, max_val * 1.3 + 5],
+                       gridcolor="#e0ebf8", showline=False,
+                       tickfont=dict(size=9, color="#4a6b8a"),
+                       title_font=dict(size=10, color="#4a6b8a")),
+            yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
+        )
+        buf = _BIO(fig.to_image(format="png", scale=1.5))
+        buf.seek(0)
+        return buf
 
     # ── KPI cards ─────────────────────────────────────────────────────────
     section("Key Metrics")
