@@ -148,116 +148,289 @@ def close_bucket(days: int) -> str:
 def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     from fpdf import FPDF
     from datetime import datetime as _dtnow
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO as _BIO
+
+    # Palette
+    NAVY   = (15,  39,  68)
+    BLUE   = (30,  95,  168)
+    LBLUE  = (224, 235, 248)
+    GRAY   = (74,  107, 138)
+    LGRAY  = (245, 248, 252)
+    WHITE  = (255, 255, 255)
+    GREEN  = (22,  163, 74)
+    ORANGE = (234, 88,  12)
+    RED    = (220, 38,  38)
+
+    _now = _dtnow.now().strftime("%Y-%m-%d %H:%M")
 
     class _PDF(FPDF):
         def header(self):
-            self.set_font("Helvetica", "B", 13)
-            self.set_text_color(15, 39, 68)
-            self.cell(0, 9, "Pipeline Health Monitor - Report", ln=True, align="C")
+            # Dark banner
+            self.set_fill_color(*NAVY)
+            self.rect(0, 0, 210, 24, "F")
+            # Accent stripe
+            self.set_fill_color(*BLUE)
+            self.rect(0, 22, 210, 2, "F")
+            # Title
+            self.set_xy(12, 6)
+            self.set_font("Helvetica", "B", 14)
+            self.set_text_color(*WHITE)
+            self.cell(120, 7, "Pipeline Health Monitor", ln=False)
+            # Date (right-aligned)
             self.set_font("Helvetica", "", 8)
-            self.set_text_color(100, 120, 140)
-            self.cell(0, 5, f"Generated: {_dtnow.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
-            self.ln(3)
+            self.set_text_color(160, 190, 220)
+            self.cell(66, 7, f"Generated: {_now}", align="R")
+            self.set_y(27)
 
         def footer(self):
-            self.set_y(-13)
-            self.set_font("Helvetica", "I", 8)
-            self.set_text_color(150, 150, 150)
-            self.cell(0, 8, f"Page {self.page_no()}", align="C")
+            self.set_y(-12)
+            self.set_draw_color(*LBLUE)
+            self.line(12, self.get_y(), 198, self.get_y())
+            self.ln(1)
+            self.set_font("Helvetica", "", 7)
+            self.set_text_color(*GRAY)
+            self.cell(93, 5, "Pipeline Health Monitor - Confidential", align="L")
+            self.cell(93, 5, f"Page {self.page_no()}", align="R")
 
     pdf = _PDF()
+    pdf.set_margins(12, 12, 12)
+    pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=14)
 
-    won  = len(df_snap[df_snap["stage"] == "Won"])
-    lost = len(df_snap[df_snap["stage"] == "Lost"])
-    cl   = won + lost
-    wr   = (won / cl * 100) if cl > 0 else 0
+    won      = len(df_snap[df_snap["stage"] == "Won"])
+    lost     = len(df_snap[df_snap["stage"] == "Lost"])
+    cl       = won + lost
+    wr       = (won / cl * 100) if cl > 0 else 0
+    stale    = int(df_snap["is_stale"].sum())
+    weighted = (df_snap["value"].astype(float) *
+                df_snap["stage"].astype(str).map(STAGE_WIN_PROB).fillna(0)).sum()
 
+    # ── Section header ────────────────────────────────────────────────────
     def section(title):
+        pdf.ln(4)
+        y = pdf.get_y()
+        pdf.set_fill_color(*BLUE)
+        pdf.rect(12, y, 3, 7, "F")
+        pdf.set_x(17)
         pdf.set_font("Helvetica", "B", 10)
-        pdf.set_text_color(15, 39, 68)
+        pdf.set_text_color(*NAVY)
         pdf.cell(0, 7, title, ln=True)
-        pdf.set_draw_color(200, 215, 235)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(2)
-
-    def table(headers, widths, rows):
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_fill_color(240, 245, 251)
-        pdf.set_text_color(30, 30, 30)
-        for h, w in zip(headers, widths):
-            pdf.cell(w, 6, h, border=1, fill=True)
-        pdf.ln()
-        pdf.set_font("Helvetica", "", 8)
-        for row in rows:
-            for val, w in zip(row, widths):
-                pdf.cell(w, 5, str(val), border=1)
-            pdf.ln()
+        pdf.set_draw_color(*LBLUE)
+        pdf.line(12, pdf.get_y(), 198, pdf.get_y())
         pdf.ln(3)
 
-    # KPIs
+    # ── KPI card (3-per-row) ──────────────────────────────────────────────
+    def kpi_card(x, y, label, value, accent=BLUE):
+        w, h = 59, 18
+        pdf.set_fill_color(*LGRAY)
+        pdf.rect(x, y, w, h, "F")
+        pdf.set_fill_color(*accent)
+        pdf.rect(x, y, 2.5, h, "F")
+        pdf.set_xy(x + 4.5, y + 2.5)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(*GRAY)
+        pdf.cell(w - 5, 4.5, label)
+        pdf.set_xy(x + 4.5, y + 8)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(*NAVY)
+        pdf.cell(w - 5, 7, value)
+
+    # ── Data table with alternating rows + optional color column ──────────
+    def table(headers, widths, rows, color_col=None, hi=(40, 20)):
+        # Header
+        pdf.set_fill_color(*NAVY)
+        pdf.set_text_color(*WHITE)
+        pdf.set_font("Helvetica", "B", 8)
+        for h, w in zip(headers, widths):
+            pdf.cell(w, 7, h, fill=True, align="C")
+        pdf.ln()
+        # Rows
+        pdf.set_font("Helvetica", "", 8)
+        for idx, row in enumerate(rows):
+            bg = LGRAY if idx % 2 == 0 else WHITE
+            pdf.set_fill_color(*bg)
+            for ci, (val, w) in enumerate(zip(row, widths)):
+                if color_col is not None and ci == color_col:
+                    try:
+                        n = float(str(val).replace("%", ""))
+                        pdf.set_text_color(*(GREEN if n >= hi[0] else ORANGE if n >= hi[1] else RED))
+                    except Exception:
+                        pdf.set_text_color(30, 30, 30)
+                else:
+                    pdf.set_text_color(30, 30, 30)
+                align = "L" if ci == 0 else "R"
+                pdf.cell(w, 6, str(val), fill=True, align=align)
+            pdf.ln()
+        pdf.set_draw_color(*LBLUE)
+        pdf.line(12, pdf.get_y(), 198, pdf.get_y())
+        pdf.ln(3)
+
+    # ── Chart helpers ─────────────────────────────────────────────────────
+    def _fig_to_buf(fig) -> _BIO:
+        buf = _BIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        buf.seek(0)
+        return buf
+
+    def _chart_funnel() -> _BIO:
+        order = ["Prospecting", "Qualified", "Proposal", "Negotiation", "Won"]
+        colors = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981"]
+        data = (stage_snap[stage_snap["stage"].isin(order)]
+                .set_index("stage").reindex(order[::-1]))
+        fig, ax = plt.subplots(figsize=(7.2, 2.6))
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
+        bars = ax.barh(data.index, data["total_opportunities"],
+                       color=colors[::-1], height=0.55)
+        for bar in bars:
+            v = bar.get_width()
+            ax.text(max(v - 3, 1), bar.get_y() + bar.get_height() / 2,
+                    f"{int(v):,}", va="center", ha="right",
+                    color="white", fontsize=8, fontweight="bold")
+        ax.set_xlabel("Opportunities", fontsize=8, color="#4a6b8a")
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color("#e0ebf8")
+        ax.tick_params(axis="y", labelsize=9, colors="#0f2744")
+        ax.tick_params(axis="x", labelsize=7, colors="#4a6b8a")
+        ax.grid(axis="x", alpha=0.25, linestyle="--", color="#c8ddf5")
+        plt.tight_layout(pad=0.4)
+        return _fig_to_buf(fig)
+
+    def _chart_closing() -> _BIO:
+        df_snap["close_bucket"] = df_snap["days_until_expected_close"].apply(close_bucket)
+        bucket_counts = (df_snap[df_snap["stage"].isin(
+            ["Prospecting", "Qualified", "Proposal", "Negotiation"])]
+            .groupby("close_bucket")["value"].count()
+            .reindex(CLOSE_BUCKET_ORDER, fill_value=0))
+        bcolors = {"Overdue": "#c0392b", "This Week": "#e67e22",
+                   "This Month": "#1e5fa8", "Later": "#7ab8f5"}
+        fig, ax = plt.subplots(figsize=(3.4, 2.6))
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
+        bars = ax.bar(bucket_counts.index,
+                      bucket_counts.values,
+                      color=[bcolors[b] for b in bucket_counts.index],
+                      width=0.55)
+        for bar in bars:
+            v = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.5,
+                    str(int(v)), ha="center", va="bottom",
+                    fontsize=8, fontweight="bold", color="#0f2744")
+        ax.set_title("Closing Timeline", fontsize=9, color="#0f2744",
+                     fontweight="bold", pad=6)
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color("#e0ebf8")
+        ax.tick_params(axis="x", labelsize=8, colors="#4a6b8a")
+        ax.tick_params(axis="y", labelsize=7, colors="#4a6b8a")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", color="#c8ddf5")
+        plt.tight_layout(pad=0.4)
+        return _fig_to_buf(fig)
+
+    def _chart_agent_winrate() -> _BIO:
+        top = agent_snap.sort_values("win_rate_pct", ascending=False).head(10)
+        vals = top["win_rate_pct"].values
+        colors = ["#16a34a" if v >= 40 else "#ea580c" if v >= 20 else "#dc2626"
+                  for v in vals]
+        fig, ax = plt.subplots(figsize=(7.2, 2.8))
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
+        bars = ax.barh(top["agent"].values[::-1], vals[::-1],
+                       color=colors[::-1], height=0.55)
+        for bar in bars:
+            v = bar.get_width()
+            ax.text(v + 0.5, bar.get_y() + bar.get_height() / 2,
+                    f"{v:.1f}%", va="center", ha="left",
+                    fontsize=7.5, color="#0f2744", fontweight="bold")
+        ax.set_xlabel("Win Rate (%)", fontsize=8, color="#4a6b8a")
+        ax.axvline(40, color="#16a34a", linewidth=0.8, linestyle="--", alpha=0.6)
+        ax.axvline(20, color="#ea580c", linewidth=0.8, linestyle="--", alpha=0.6)
+        ax.set_xlim(0, max(vals) * 1.2 + 5)
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color("#e0ebf8")
+        ax.tick_params(axis="y", labelsize=9, colors="#0f2744")
+        ax.tick_params(axis="x", labelsize=7, colors="#4a6b8a")
+        ax.grid(axis="x", alpha=0.25, linestyle="--", color="#c8ddf5")
+        plt.tight_layout(pad=0.4)
+        return _fig_to_buf(fig)
+
+    # ── KPI cards ─────────────────────────────────────────────────────────
     section("Key Metrics")
     kpis = [
-        ("Total Opportunities", f"{len(df_snap):,}"),
-        ("Pipeline Value", f"${df_snap['value'].sum():,.0f}"),
-        ("Win Rate", f"{wr:.1f}%"),
-        ("Won Deals", f"{won:,}"),
-        ("Lost Deals", f"{lost:,}"),
-        ("Stale Opportunities", f"{int(df_snap['is_stale'].sum()):,}"),
+        ("Total Opportunities", f"{len(df_snap):,}",              BLUE),
+        ("Pipeline Value",      f"${df_snap['value'].sum():,.0f}", NAVY),
+        ("Weighted Forecast",   f"${weighted:,.0f}",               BLUE),
+        ("Win Rate",            f"{wr:.1f}%",
+         GREEN if wr >= 40 else ORANGE if wr >= 20 else RED),
+        ("Won Deals",           f"{won:,}",                        GREEN),
+        ("Stale Opportunities", f"{stale:,}",
+         RED if stale > 20 else ORANGE),
     ]
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(60, 80, 100)
-    col = 95
-    for j in range(0, len(kpis), 2):
-        for k in range(2):
-            if j + k < len(kpis):
-                pdf.cell(col, 5, kpis[j + k][0])
-        pdf.ln()
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(15, 39, 68)
-        for k in range(2):
-            if j + k < len(kpis):
-                pdf.cell(col, 7, kpis[j + k][1])
-        pdf.ln(9)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(60, 80, 100)
+    y0 = pdf.get_y()
+    for i, (lbl, val, color) in enumerate(kpis):
+        kpi_card(12 + (i % 3) * 62, y0 + (i // 3) * 21, lbl, val, color)
+    pdf.set_y(y0 + 2 * 21 + 4)
 
-    # Stage table
+    # ── Funnel chart ──────────────────────────────────────────────────────
+    section("Pipeline Funnel")
+    _buf = _chart_funnel()
+    pdf.image(_buf, x=12, w=186)
+    pdf.ln(4)
+
+    # ── Pipeline by stage ─────────────────────────────────────────────────
     section("Pipeline by Stage")
     table(
         ["Stage", "Opportunities", "Pipeline Value", "Weighted Forecast", "Stale"],
-        [38, 33, 40, 44, 20],
+        [40, 32, 44, 46, 24],
         [
-            [r["stage"], f"{r['total_opportunities']:,}", f"${r['total_value']:,.0f}",
-             f"${r['weighted_value']:,.0f}", int(r["stale_opportunities"])]
+            [r["stage"], f"{r['total_opportunities']:,}",
+             f"${r['total_value']:,.0f}", f"${r['weighted_value']:,.0f}",
+             int(r["stale_opportunities"])]
             for _, r in stage_snap.iterrows()
         ],
     )
 
-    # Agent table (top 10 by win rate)
+    # ── Closing timeline chart ─────────────────────────────────────────────
+    section("Closing Timeline")
+    _buf = _chart_closing()
+    pdf.image(_buf, x=57, w=96)
+    pdf.ln(4)
+
+    # ── Conversion by agent ───────────────────────────────────────────────
     section("Conversion by Agent (Top 10 by Win Rate)")
-    top_agents = agent_snap.sort_values("win_rate_pct", ascending=False).head(10)
     table(
-        ["Agent", "Opps", "Won", "Win Rate", "Pipeline Value"],
-        [38, 22, 18, 27, 50],
+        ["Agent", "Opportunities", "Won", "Win Rate", "Pipeline Value"],
+        [46, 34, 22, 30, 54],
         [
             [r["agent"], r["total_opportunities"], r["won_opportunities"],
              f"{r['win_rate_pct']:.1f}%", f"${r['total_pipeline_value']:,.0f}"]
-            for _, r in top_agents.iterrows()
+            for _, r in agent_snap.sort_values("win_rate_pct", ascending=False).head(10).iterrows()
         ],
+        color_col=3,
     )
 
-    # Product table
+    # ── Agent win rate chart ───────────────────────────────────────────────
+    _buf = _chart_agent_winrate()
+    pdf.image(_buf, x=12, w=186)
+    pdf.ln(4)
+
+    # ── Conversion by product ─────────────────────────────────────────────
     section("Conversion by Product")
     table(
-        ["Product", "Opps", "Won", "Win Rate", "Pipeline Value"],
-        [38, 22, 18, 27, 50],
+        ["Product", "Opportunities", "Won", "Win Rate", "Pipeline Value"],
+        [46, 34, 22, 30, 54],
         [
             [r["product"], r["total_opportunities"], r["won_opportunities"],
              f"{r['win_rate_pct']:.1f}%", f"${r['total_pipeline_value']:,.0f}"]
             for _, r in product_snap.sort_values("win_rate_pct", ascending=False).iterrows()
         ],
+        color_col=3,
     )
 
     return bytes(pdf.output())
