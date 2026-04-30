@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-import altair as alt
+import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -551,70 +551,44 @@ funnel_data = stage_agg[stage_agg["stage"] != "Lost"].copy()
 funnel_data["stage"] = pd.Categorical(funnel_data["stage"],
     categories=[s for s in STAGE_ORDER if s != "Lost"], ordered=True)
 funnel_data = funnel_data.sort_values("stage")
-funnel_data["color"] = STAGE_BLUES[:len(funnel_data)]
-
-# Conversion rate between consecutive stages
-conv_labels = []
-for i in range(len(funnel_data) - 1):
-    curr = funnel_data.iloc[i]["total_opportunities"]
-    nxt  = funnel_data.iloc[i+1]["total_opportunities"]
-    rate = round(nxt / curr * 100, 1) if curr > 0 else 0
-    conv_labels.append({
-        "stage": funnel_data.iloc[i+1]["stage"],
-        "label": f"↓ {rate}%",
-        "label_x": nxt * 0.55,  # 55% inside the destination bar
-    })
-conv_df = pd.DataFrame(conv_labels)
-
-hover = alt.selection_point(on="mouseover", empty=False, fields=["stage"])
-
-funnel_bars = (
-    alt.Chart(funnel_data)
-    .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6)
-    .encode(
-        y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"],
-                title="", axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
-        x=alt.X("total_opportunities:Q", title="Opportunities",
-                axis=alt.Axis(labelFontSize=11)),
-        color=alt.Color("stage:N",
-            scale=alt.Scale(domain=funnel_data["stage"].tolist(), range=funnel_data["color"].tolist()),
-            legend=None),
-        opacity=alt.condition(hover, alt.value(1.0), alt.value(0.82)),
-        tooltip=[
-            alt.Tooltip("stage:N", title="Stage"),
-            alt.Tooltip("total_opportunities:Q", title="Opportunities"),
-            alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
-            alt.Tooltip("weighted_value:Q", title="Weighted Forecast", format="$,.0f"),
-            alt.Tooltip("stale_opportunities:Q", title="Stale"),
-        ],
-    )
-    .add_params(hover)
-    .properties(height=300)
-)
-
-funnel_labels = (
-    alt.Chart(funnel_data)
-    .mark_text(align="right", dx=-8, fontSize=12, fontWeight="bold", color="#ffffff")
-    .encode(
-        y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
-        x=alt.X("total_opportunities:Q"),
-        text=alt.Text("total_opportunities:Q"),
-    )
-)
-
-conv_text = (
-    alt.Chart(conv_df)
-    .mark_text(align="center", fontSize=11, color="#ffffff", fontWeight="bold")
-    .encode(
-        y=alt.Y("stage:N", sort=[s for s in STAGE_ORDER if s != "Lost"]),
-        x=alt.X("label_x:Q"),
-        text=alt.Text("label:N"),
-    )
-)
 
 fn_left, fn_right = st.columns([3, 1])
 with fn_left:
-    st.altair_chart((funnel_bars + funnel_labels + conv_text), use_container_width=True)
+    _stages  = funnel_data["stage"].astype(str).tolist()
+    _opps    = funnel_data["total_opportunities"].tolist()
+    _fig = go.Figure(go.Bar(
+        y=_stages, x=_opps, orientation="h",
+        marker_color=STAGE_BLUES[:len(_stages)],
+        text=[f"  {int(v):,}" for v in _opps],
+        textposition="inside", insidetextanchor="end",
+        textfont=dict(color="white", size=12, family="Arial Black"),
+        customdata=funnel_data[["total_value","weighted_value","stale_opportunities"]].values,
+        hovertemplate=(
+            "<b>%{y}</b><br>Opportunities: %{x:,}<br>"
+            "Pipeline Value: $%{customdata[0]:,.0f}<br>"
+            "Weighted: $%{customdata[1]:,.0f}<br>"
+            "Stale: %{customdata[2]:.0f}<extra></extra>"
+        ),
+    ))
+    for i in range(len(funnel_data) - 1):
+        _curr = funnel_data.iloc[i]["total_opportunities"]
+        _nxt  = funnel_data.iloc[i+1]["total_opportunities"]
+        _rate = round(_nxt / _curr * 100, 1) if _curr > 0 else 0
+        _fig.add_annotation(
+            x=_nxt * 0.55, y=funnel_data.iloc[i+1]["stage"],
+            text=f"↓ {_rate}%", showarrow=False,
+            font=dict(color="white", size=11, family="Arial Black"),
+        )
+    _fig.update_layout(
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False, height=300,
+        margin=dict(l=10, r=10, t=10, b=30),
+        xaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
+                   tickfont=dict(size=10, color="#4a6b8a")),
+        yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False,
+                   categoryorder="array",
+                   categoryarray=[s for s in STAGE_ORDER if s != "Lost"]),
+    )
+    st.plotly_chart(_fig, use_container_width=True)
 
 with fn_right:
     st.markdown("**Conversion rates**")
@@ -646,37 +620,35 @@ st.divider()
 st.subheader("Weighted Revenue Forecast")
 
 forecast_data = stage_agg[stage_agg["stage"] != "Lost"][["stage","total_value","weighted_value"]].copy()
-forecast_melted = forecast_data.melt(
-    id_vars="stage", value_vars=["total_value","weighted_value"],
-    var_name="type", value_name="amount",
-)
-forecast_melted["type"] = forecast_melted["type"].map(
-    {"total_value":"Total Pipeline","weighted_value":"Weighted Forecast"})
-
-forecast_hover = alt.selection_point(on="mouseover", fields=["stage"], empty=False)
-
-forecast_chart = (
-    alt.Chart(forecast_melted)
-    .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
-    .encode(
-        x=alt.X("stage:N", sort=STAGE_ORDER, title="",
-                axis=alt.Axis(labelFontSize=11, labelFontWeight="bold")),
-        y=alt.Y("amount:Q", title="$ Value", axis=alt.Axis(format="$,.0f")),
-        color=alt.Color("type:N",
-            scale=alt.Scale(domain=["Total Pipeline","Weighted Forecast"],
-                            range=["#a8d4f5", PRIMARY]),
-            legend=alt.Legend(orient="top-right", title="")),
-        xOffset="type:N",
-        opacity=alt.condition(forecast_hover, alt.value(1.0), alt.value(0.85)),
-        tooltip=["stage","type", alt.Tooltip("amount:Q", format="$,.0f", title="Value")],
-    )
-    .add_params(forecast_hover)
-    .properties(height=300)
-)
+_fc_idx = forecast_data.set_index("stage")
+_stages_fc = [s for s in STAGE_ORDER if s in _fc_idx.index and s != "Lost"]
 
 fc_left, fc_right = st.columns([2, 1])
 with fc_left:
-    st.altair_chart(forecast_chart, use_container_width=True)
+    _fig = go.Figure()
+    _fig.add_trace(go.Bar(
+        x=_stages_fc,
+        y=[_fc_idx.loc[s,"total_value"] for s in _stages_fc],
+        name="Total Pipeline", marker_color="#a8d4f5", offsetgroup=0,
+        hovertemplate="<b>%{x}</b><br>Total Pipeline: $%{y:,.0f}<extra></extra>",
+    ))
+    _fig.add_trace(go.Bar(
+        x=_stages_fc,
+        y=[_fc_idx.loc[s,"weighted_value"] for s in _stages_fc],
+        name="Weighted Forecast", marker_color=PRIMARY, offsetgroup=1,
+        hovertemplate="<b>%{x}</b><br>Weighted Forecast: $%{y:,.0f}<extra></extra>",
+    ))
+    _fig.update_layout(
+        barmode="group", height=300,
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=10, r=10, t=10, b=30),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(size=11)),
+        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
+        yaxis=dict(tickformat="$,.0f", gridcolor="#e0ebf8", showline=False,
+                   title="$ Value", tickfont=dict(size=10, color="#4a6b8a")),
+    )
+    st.plotly_chart(_fig, use_container_width=True)
 with fc_right:
     st.markdown("**Win probability by stage**")
     prob_df = pd.DataFrame(
@@ -695,50 +667,40 @@ mix_data = (
     .agg(opportunities=("value","count"), total_value=("value","sum"))
     .reset_index()
 )
+region_totals = df.groupby("region").agg(total_value=("value","sum")).reset_index()
+region_totals = region_totals.set_index("region").reindex(REGIONS).reset_index()
 
-region_hover = alt.selection_point(fields=["region"], on="mouseover", empty=False)
-
-stacked_bar = (
-    alt.Chart(mix_data)
-    .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
-    .encode(
-        x=alt.X("region:N", sort=REGIONS, title="",
-                axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
-        y=alt.Y("opportunities:Q", title="Opportunities"),
-        color=alt.Color("product:N", sort=PRODUCTS,
-            scale=alt.Scale(domain=list(PRODUCT_COLORS.keys()),
-                            range=list(PRODUCT_COLORS.values())),
-            legend=alt.Legend(title="Product", orient="right", labelFontSize=11)),
-        order=alt.Order("product:N", sort="ascending"),
-        opacity=alt.condition(region_hover, alt.value(1.0), alt.value(0.85)),
-        tooltip=[
-            alt.Tooltip("region:N", title="Region"),
-            alt.Tooltip("product:N", title="Product"),
-            alt.Tooltip("opportunities:Q", title="Opportunities"),
-            alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
-        ],
-    )
-    .add_params(region_hover)
-    .properties(title=alt.TitleParams("Product Mix by Region", anchor="start"), height=300)
+_fig = go.Figure()
+for _prod in PRODUCTS:
+    _d = mix_data[mix_data["product"] == _prod].set_index("region").reindex(REGIONS, fill_value=0).reset_index()
+    _fig.add_trace(go.Bar(
+        name=_prod, x=_d["region"], y=_d["opportunities"],
+        marker_color=PRODUCT_COLORS[_prod],
+        hovertemplate=f"<b>{_prod}</b><br>%{{x}}: %{{y:,}} opps<extra></extra>",
+    ))
+_fig.add_trace(go.Scatter(
+    x=REGIONS, y=region_totals["total_value"].tolist(),
+    name="Pipeline Value", mode="lines+markers",
+    line=dict(color="#e05c2d", width=2.5),
+    marker=dict(size=8, color="#e05c2d"),
+    yaxis="y2",
+    hovertemplate="<b>%{x}</b><br>Pipeline Value: $%{y:,.0f}<extra></extra>",
+))
+_fig.update_layout(
+    barmode="stack", height=300,
+    plot_bgcolor="white", paper_bgcolor="white",
+    title=dict(text="Product Mix by Region", font=dict(size=13, color="#0f2744"), x=0),
+    margin=dict(l=10, r=10, t=50, b=30),
+    legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1,
+                font=dict(size=10)),
+    xaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
+    yaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
+               tickfont=dict(size=10, color="#4a6b8a")),
+    yaxis2=dict(title=dict(text="Pipeline Value ($)", font=dict(color="#e05c2d")),
+                overlaying="y", side="right", showgrid=False, tickformat="$,.0f",
+                tickfont=dict(size=10, color="#e05c2d")),
 )
-
-# Value by region (line overlay on second axis)
-region_value = (
-    df.groupby("region").agg(total_value=("value","sum")).reset_index()
-)
-value_line = (
-    alt.Chart(region_value)
-    .mark_line(color="#e05c2d", strokeWidth=2.5, point=alt.OverlayMarkDef(filled=True, size=80, color="#e05c2d"))
-    .encode(
-        x=alt.X("region:N", sort=REGIONS),
-        y=alt.Y("total_value:Q", title="Pipeline Value ($)",
-                axis=alt.Axis(format="$,.0f")),
-        tooltip=[alt.Tooltip("region:N"), alt.Tooltip("total_value:Q", format="$,.0f", title="Pipeline Value")],
-    )
-)
-
-combo = alt.layer(stacked_bar, value_line).resolve_scale(y="independent")
-st.altair_chart(combo, use_container_width=True)
+st.plotly_chart(_fig, use_container_width=True)
 
 st.divider()
 
@@ -757,32 +719,27 @@ BUCKET_COLORS = {"Overdue":"#c0392b","This Week":"#e67e22","This Month":PRIMARY,
 
 ct_left, ct_right = st.columns([1,1])
 with ct_left:
-    bucket_bars = (
-        alt.Chart(bucket_agg)
-        .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
-        .encode(
-            x=alt.X("close_bucket:N", sort=CLOSE_BUCKET_ORDER, title="",
-                    axis=alt.Axis(labelFontSize=12, labelFontWeight="bold")),
-            y=alt.Y("opportunities:Q", title="Opportunities"),
-            color=alt.Color("close_bucket:N",
-                scale=alt.Scale(domain=list(BUCKET_COLORS.keys()),
-                                range=list(BUCKET_COLORS.values())),
-                legend=None),
-            tooltip=["close_bucket","opportunities",
-                     alt.Tooltip("pipeline_value:Q", format="$,.0f", title="Pipeline Value")],
-        )
-        .properties(height=260)
+    _bkt_agg_idx = bucket_agg.set_index("close_bucket")
+    _bkt_x = [b for b in CLOSE_BUCKET_ORDER if b in _bkt_agg_idx.index]
+    _bkt_y = [int(_bkt_agg_idx.loc[b,"opportunities"]) for b in _bkt_x]
+    _bkt_pv = [_bkt_agg_idx.loc[b,"pipeline_value"] for b in _bkt_x]
+    _fig = go.Figure(go.Bar(
+        x=_bkt_x, y=_bkt_y,
+        marker_color=[BUCKET_COLORS[b] for b in _bkt_x],
+        text=[str(v) for v in _bkt_y],
+        textposition="outside",
+        textfont=dict(color="#0f2744", size=13, family="Arial Black"),
+        customdata=_bkt_pv,
+        hovertemplate="%{x}: %{y:,}<br>Pipeline Value: $%{customdata:,.0f}<extra></extra>",
+    ))
+    _fig.update_layout(
+        height=260, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        margin=dict(l=10, r=10, t=20, b=10),
+        xaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
+        yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=10, color="#4a6b8a"),
+                   range=[0, max(_bkt_y) * 1.2 + 1] if _bkt_y else [0, 10]),
     )
-    bucket_labels = (
-        alt.Chart(bucket_agg)
-        .mark_text(dy=-8, fontSize=13, fontWeight="bold", color="#ffffff")
-        .encode(
-            x=alt.X("close_bucket:N", sort=CLOSE_BUCKET_ORDER),
-            y=alt.Y("opportunities:Q"),
-            text=alt.Text("opportunities:Q"),
-        )
-    )
-    st.altair_chart(bucket_bars + bucket_labels, use_container_width=True)
+    st.plotly_chart(_fig, use_container_width=True)
 
 with ct_right:
     overdue   = bucket_agg[bucket_agg["close_bucket"] == "Overdue"]
@@ -829,42 +786,51 @@ agent_agg["won"]      = agent_agg["won"].astype(int)
 agent_agg["win_rate"] = (agent_agg["won"] / agent_agg["opportunities"] * 100).round(1)
 
 top_agents = agent_agg.sort_values("total_value", ascending=False).head(10)
+_ta = top_agents.iloc[::-1]  # reverse so highest value is at top
+_ta_agents  = _ta["agent"].tolist()
+_ta_values  = _ta["total_value"].tolist()
+_ta_wr      = _ta["win_rate"].tolist()
+_ta_opps    = _ta["opportunities"].tolist()
+_ta_won     = _ta["won"].tolist()
 
-zero_line = alt.Chart(top_agents).mark_rule(color="#dde6f0", strokeWidth=1.5).encode(
-    y=alt.Y("agent:N", sort=alt.EncodingSortField("total_value", order="descending")),
-    x=alt.X("total_value:Q", title="Pipeline Value ($)"),
-    x2=alt.value(0),
+_fig = go.Figure()
+# Stems
+_fig.add_trace(go.Bar(
+    y=_ta_agents, x=_ta_values, orientation="h",
+    marker_color="#c8ddf5", width=0.06,
+    showlegend=False, hoverinfo="skip",
+))
+# Dots colored by win rate
+_fig.add_trace(go.Scatter(
+    y=_ta_agents, x=_ta_values, mode="markers+text",
+    marker=dict(size=16, color=_ta_wr, colorscale="Blues", cmin=0, cmax=100,
+                showscale=True,
+                colorbar=dict(title=dict(text="Win Rate %", font=dict(size=10)),
+                              len=0.7, thickness=14, x=1.02,
+                              tickfont=dict(size=9))),
+    text=[f" {w:.0f}%" for w in _ta_wr],
+    textposition="middle right",
+    textfont=dict(size=10, color="#4a6b8a"),
+    customdata=list(zip(_ta_opps, _ta_won, _ta_wr)),
+    hovertemplate=(
+        "<b>%{y}</b><br>Pipeline Value: $%{x:,.0f}<br>"
+        "Opportunities: %{customdata[0]:,}<br>"
+        "Won: %{customdata[1]:,}<br>"
+        "Win Rate: %{customdata[2]:.1f}%<extra></extra>"
+    ),
+    showlegend=False,
+))
+_fig.update_layout(
+    barmode="overlay", height=340,
+    plot_bgcolor="white", paper_bgcolor="white",
+    title=dict(text="Top 10 Agents by Pipeline Value  (dot color = win rate %)",
+               font=dict(size=12, color="#0f2744"), x=0),
+    margin=dict(l=10, r=100, t=50, b=30),
+    xaxis=dict(title="Pipeline Value ($)", tickformat="$,.0f", gridcolor="#e0ebf8",
+               showline=False, tickfont=dict(size=10, color="#4a6b8a")),
+    yaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
 )
-lollipop_stem = alt.Chart(top_agents).mark_bar(height=3, color="#c8ddf5").encode(
-    y=alt.Y("agent:N", sort=alt.EncodingSortField("total_value", order="descending"), title="",
-            axis=alt.Axis(labelFontSize=11)),
-    x=alt.X("total_value:Q", title="Pipeline Value ($)", axis=alt.Axis(format="$,.0f")),
-)
-lollipop_dot = alt.Chart(top_agents).mark_point(filled=True, size=120).encode(
-    y=alt.Y("agent:N", sort=alt.EncodingSortField("total_value", order="descending")),
-    x=alt.X("total_value:Q"),
-    color=alt.Color("win_rate:Q",
-        scale=alt.Scale(scheme="blues", domainMin=0, domainMax=100),
-        legend=alt.Legend(title="Win Rate %", gradientLength=100, orient="right")),
-    tooltip=[
-        alt.Tooltip("agent:N", title="Agent"),
-        alt.Tooltip("total_value:Q", title="Pipeline Value", format="$,.0f"),
-        alt.Tooltip("opportunities:Q", title="Opportunities"),
-        alt.Tooltip("won:Q", title="Won"),
-        alt.Tooltip("win_rate:Q", title="Win Rate", format=".1f"),
-    ],
-)
-lollipop_labels = alt.Chart(top_agents).mark_text(align="left", dx=10, fontSize=10, color="#4a6b8a").encode(
-    y=alt.Y("agent:N", sort=alt.EncodingSortField("total_value", order="descending")),
-    x=alt.X("total_value:Q"),
-    text=alt.Text("win_rate:Q", format=".0f"),
-)
-
-lollipop = (lollipop_stem + lollipop_dot + lollipop_labels).properties(
-    title=alt.TitleParams("Top 10 Agents by Pipeline Value  (dot color = win rate %)", anchor="start"),
-    height=320,
-)
-st.altair_chart(lollipop, use_container_width=True)
+st.plotly_chart(_fig, use_container_width=True)
 
 st.divider()
 
@@ -909,48 +875,45 @@ stale_chart_data = stage_agg[["stage","stale_opportunities"]].copy()
 
 ds_left, ds_right = st.columns(2)
 with ds_left:
-    deal_bars = (
-        alt.Chart(avg_deal_stage)
-        .mark_bar(color=PRIMARY, cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
-        .encode(
-            x=alt.X("stage:N", sort=STAGE_ORDER, title="",
-                    axis=alt.Axis(labelFontSize=11, labelFontWeight="bold")),
-            y=alt.Y("avg_deal_size:Q", title="Avg Deal ($)", axis=alt.Axis(format="$,.0f")),
-            tooltip=[alt.Tooltip("stage:N"), alt.Tooltip("avg_deal_size:Q", format="$,.0f", title="Avg Deal")],
-        ).properties(title="Avg Deal Size by Stage", height=280)
+    _ds_idx    = avg_deal_stage.set_index("stage")
+    _ds_stages = [s for s in STAGE_ORDER if s in _ds_idx.index]
+    _ds_avgs   = [_ds_idx.loc[s,"avg_deal_size"] for s in _ds_stages]
+    _fig = go.Figure(go.Bar(
+        x=_ds_stages, y=_ds_avgs, marker_color=PRIMARY,
+        text=[f"${v:,.0f}" for v in _ds_avgs],
+        textposition="outside", textfont=dict(color="#0f2744", size=10),
+        hovertemplate="%{x}: $%{y:,.0f}<extra></extra>",
+    ))
+    _fig.update_layout(
+        title=dict(text="Avg Deal Size by Stage", font=dict(size=12, color="#0f2744"), x=0),
+        height=280, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
+        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
+        yaxis=dict(tickformat="$,.0f", gridcolor="#e0ebf8", showline=False,
+                   tickfont=dict(size=9, color="#4a6b8a"),
+                   range=[0, max(_ds_avgs) * 1.2]),
     )
-    deal_labels = (
-        alt.Chart(avg_deal_stage)
-        .mark_text(dy=-8, fontSize=10, color="#ffffff")
-        .encode(
-            x=alt.X("stage:N", sort=STAGE_ORDER),
-            y=alt.Y("avg_deal_size:Q"),
-            text=alt.Text("avg_deal_size:Q", format="$,.0f"),
-        )
-    )
-    st.altair_chart(deal_bars + deal_labels, use_container_width=True)
+    st.plotly_chart(_fig, use_container_width=True)
 
 with ds_right:
-    stale_bars = (
-        alt.Chart(stale_chart_data)
-        .mark_bar(color="#e05c2d", cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
-        .encode(
-            x=alt.X("stage:N", sort=STAGE_ORDER, title="",
-                    axis=alt.Axis(labelFontSize=11, labelFontWeight="bold")),
-            y=alt.Y("stale_opportunities:Q", title="Stale Opportunities"),
-            tooltip=["stage","stale_opportunities"],
-        ).properties(title="Stale Opportunities by Stage (>14 days)", height=280)
+    _st_idx    = stale_chart_data.set_index("stage")
+    _st_stages = [s for s in STAGE_ORDER if s in _st_idx.index]
+    _st_vals   = [int(_st_idx.loc[s,"stale_opportunities"]) for s in _st_stages]
+    _fig = go.Figure(go.Bar(
+        x=_st_stages, y=_st_vals, marker_color="#e05c2d",
+        text=[str(v) for v in _st_vals],
+        textposition="outside", textfont=dict(color="#0f2744", size=10),
+        hovertemplate="%{x}: %{y} stale<extra></extra>",
+    ))
+    _fig.update_layout(
+        title=dict(text="Stale Opportunities by Stage (>14 days)", font=dict(size=12, color="#0f2744"), x=0),
+        height=280, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
+        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
+        yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=9, color="#4a6b8a"),
+                   range=[0, max(_st_vals) * 1.2 + 1]),
     )
-    stale_labels = (
-        alt.Chart(stale_chart_data)
-        .mark_text(dy=-8, fontSize=10, color="#ffffff")
-        .encode(
-            x=alt.X("stage:N", sort=STAGE_ORDER),
-            y=alt.Y("stale_opportunities:Q"),
-            text=alt.Text("stale_opportunities:Q"),
-        )
-    )
-    st.altair_chart(stale_bars + stale_labels, use_container_width=True)
+    st.plotly_chart(_fig, use_container_width=True)
 
 st.divider()
 
