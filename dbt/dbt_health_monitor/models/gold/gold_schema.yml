@@ -74,3 +74,111 @@ models:
 
   - name: gld_stale_opportunities
     description: Opportunities not updated in more than 14 days.
+
+  - name: gld_booking_overview
+    description: Aggregated booking metrics by booking status, channel, and currency for dashboard consumption.
+    columns:
+      - name: booking_status
+        description: Booking status from the Silver booking model.
+      - name: channel
+        description: Sales or acquisition channel used for the booking.
+      - name: currency
+        description: Currency of the booking amount.
+      - name: total_bookings
+        description: Total number of bookings in the group.
+      - name: total_booking_amount
+        description: Sum of booking amounts in the group.
+      - name: avg_booking_amount
+        description: Average booking amount in the group.
+      - name: distinct_customers
+        description: Number of distinct customers in the group.
+      - name: latest_booking_updated_at
+        description: Most recent update timestamp among bookings in the group.
+
+  - name: gld_customer_overview
+    description: Aggregated customer metrics by segment, loyalty tier, and country for dashboard consumption.
+    columns:
+      - name: customer_segment
+        description: Customer segment classification.
+      - name: loyalty_tier
+        description: Loyalty tier assigned to the customer.
+      - name: country
+        description: Country associated with the customer.
+      - name: total_customers
+        description: Total number of customers in the group.
+      - name: customers_with_email
+        description: Number of customers with a non-null email.
+      - name: customers_with_phone
+        description: Number of customers with a non-null phone.
+      - name: latest_customer_updated_at
+        description: Most recent update timestamp among customers in the group.
+
+  - name: gld_finance_event_monitor
+    description: Monitoring summary of finance-related Silver event domains for dashboard consumption.
+    columns:
+      - name: domain
+        description: Finance event domain summarized in the row.
+      - name: total_events
+        description: Total number of events in the Silver model.
+      - name: first_ingested_at
+        description: Earliest ingested timestamp in the Silver model.
+      - name: last_ingested_at
+        description: Latest ingested timestamp in the Silver model.
+      - name: last_staged_at
+        description: Latest staged timestamp in the Silver model.
+
+  - name: gld_operations_event_monitor
+    description: Monitoring summary of travel operations Silver event domains for dashboard consumption.
+    columns:
+      - name: domain
+        description: Operations event domain summarized in the row.
+      - name: total_events
+        description: Total number of events in the Silver model.
+      - name: first_ingested_at
+        description: Earliest ingested timestamp in the Silver model.
+      - name: last_ingested_at
+        description: Latest ingested timestamp in the Silver model.
+      - name: last_staged_at
+        description: Latest staged timestamp in the Silver model.
+
+  - name: gld_engagement_event_monitor
+    description: Monitoring summary of engagement-related Silver event domains for dashboard consumption.
+    columns:
+      - name: domain
+        description: Engagement event domain summarized in the row.
+      - name: total_events
+        description: Total number of events in the Silver model.
+      - name: first_ingested_at
+        description: Earliest ingested timestamp in the Silver model.
+      - name: last_ingested_at
+        description: Latest ingested timestamp in the Silver model.
+      - name: last_staged_at
+        description: Latest staged timestamp in the Silver model.
+
+  - name: gld_partner_event_monitor
+    description: Monitoring summary of partner and agency Silver event domains for dashboard consumption.
+    columns:
+      - name: domain
+        description: Partner-related event domain summarized in the row.
+      - name: total_events
+        description: Total number of events in the Silver model.
+      - name: first_ingested_at
+        description: Earliest ingested timestamp in the Silver model.
+      - name: last_ingested_at
+        description: Latest ingested timestamp in the Silver model.
+      - name: last_staged_at
+        description: Latest staged timestamp in the Silver model.
+
+  - name: gld_risk_event_monitor
+    description: Monitoring summary of risk-related Silver event domains for dashboard consumption.
+    columns:
+      - name: domain
+        description: Risk event domain summarized in the row.
+      - name: total_events
+        description: Total number of events in the Silver model.
+      - name: first_ingested_at
+        description: Earliest ingested timestamp in the Silver model.
+      - name: last_ingested_at
+        description: Latest ingested timestamp in the Silver model.
+      - name: last_staged_at
+        description: Latest staged timestamp in the Silver model.
