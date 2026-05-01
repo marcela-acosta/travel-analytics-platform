@@ -544,6 +544,39 @@ with _rb2:
 
 st.divider()
 
+
+def _dark(fig):
+    """Transparent background + light text for dark-themed Streamlit dashboard."""
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#d6e4f7"),
+        title_font_color="#d6e4f7",
+    )
+    fig.update_xaxes(
+        gridcolor="rgba(255,255,255,0.08)",
+        zerolinecolor="rgba(255,255,255,0.08)",
+        tickfont=dict(color="#8aafd4"),
+        title_font=dict(color="#8aafd4"),
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(255,255,255,0.08)",
+        zerolinecolor="rgba(255,255,255,0.08)",
+        tickfont=dict(color="#8aafd4"),
+        title_font=dict(color="#8aafd4"),
+        selector=dict(side="left"),
+    )
+    fig.update_traces(
+        textfont=dict(color="#d6e4f7"),
+        selector=dict(textposition="outside"),
+    )
+    fig.update_traces(
+        textfont=dict(color="#8aafd4"),
+        selector=dict(textposition="middle right"),
+    )
+    return fig
+
+
 # ── Funnel + Conversion rates ─────────────────────────────────────────────────
 st.subheader("Pipeline Funnel")
 
@@ -588,7 +621,7 @@ with fn_left:
                    categoryorder="array",
                    categoryarray=[s for s in STAGE_ORDER if s != "Lost"]),
     )
-    st.plotly_chart(_fig, use_container_width=True)
+    st.plotly_chart(_dark(_fig), use_container_width=True)
 
 with fn_right:
     st.markdown("**Conversion rates**")
@@ -648,7 +681,7 @@ with fc_left:
         yaxis=dict(tickformat="$,.0f", gridcolor="#e0ebf8", showline=False,
                    title="$ Value", tickfont=dict(size=10, color="#4a6b8a")),
     )
-    st.plotly_chart(_fig, use_container_width=True)
+    st.plotly_chart(_dark(_fig), use_container_width=True)
 with fc_right:
     st.markdown("**Win probability by stage**")
     prob_df = pd.DataFrame(
@@ -700,7 +733,7 @@ _fig.update_layout(
                 overlaying="y", side="right", showgrid=False, tickformat="$,.0f",
                 tickfont=dict(size=10, color="#e05c2d")),
 )
-st.plotly_chart(_fig, use_container_width=True)
+st.plotly_chart(_dark(_fig), use_container_width=True)
 
 st.divider()
 
@@ -739,7 +772,7 @@ with ct_left:
         yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=10, color="#4a6b8a"),
                    range=[0, max(_bkt_y) * 1.2 + 1] if _bkt_y else [0, 10]),
     )
-    st.plotly_chart(_fig, use_container_width=True)
+    st.plotly_chart(_dark(_fig), use_container_width=True)
 
 with ct_right:
     overdue   = bucket_agg[bucket_agg["close_bucket"] == "Overdue"]
@@ -830,7 +863,7 @@ _fig.update_layout(
                showline=False, tickfont=dict(size=10, color="#4a6b8a")),
     yaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
 )
-st.plotly_chart(_fig, use_container_width=True)
+st.plotly_chart(_dark(_fig), use_container_width=True)
 
 st.divider()
 
@@ -893,7 +926,7 @@ with ds_left:
                    tickfont=dict(size=9, color="#4a6b8a"),
                    range=[0, max(_ds_avgs) * 1.2]),
     )
-    st.plotly_chart(_fig, use_container_width=True)
+    st.plotly_chart(_dark(_fig), use_container_width=True)
 
 with ds_right:
     _st_idx    = stale_chart_data.set_index("stage")
@@ -913,7 +946,7 @@ with ds_right:
         yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=9, color="#4a6b8a"),
                    range=[0, max(_st_vals) * 1.2 + 1]),
     )
-    st.plotly_chart(_fig, use_container_width=True)
+    st.plotly_chart(_dark(_fig), use_container_width=True)
 
 st.divider()
 
