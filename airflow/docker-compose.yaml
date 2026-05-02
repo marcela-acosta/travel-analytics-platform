@@ -16,12 +16,14 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/keys/pipeline-sa.json
+    PIP_ADDITIONAL_REQUIREMENTS: 'astronomer-cosmos==1.14.1 dbt-core==1.11.8 dbt-bigquery==1.11.1'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./entrypoint-with-deps.sh:/entrypoint-with-deps.sh
     - ../infra/data/keys:/opt/airflow/keys
     - ../dbt:/opt/airflow/dbt
   user: "${AIRFLOW_UID:-50000}:0"
@@ -52,22 +54,64 @@ services:
       - -c
       - |
         airflow db migrate
-        airflow users create \
-          --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
-          --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@example.com || true
+        python3 << 'EOF' || true
+        import os
+        import sys
+        from werkzeug.security import generate_password_hash
+        
+        os.environ.setdefault('AIRFLOW_HOME', '/home/airflow')
+        
+        username = os.getenv('_AIRFLOW_WWW_USER_USERNAME', 'admin')
+        password = os.getenv('_AIRFLOW_WWW_USER_PASSWORD', 'admin')
+        
+        # Generate properly hashed password
+        hashed_password = generate_password_hash(password, method='scrypt')
+        
+        # Connect to database and create/update user
+        import psycopg2
+        from psycopg2.extras import execute_values
+        
+        conn = psycopg2.connect(
+            host='postgres',
+            database='airflow',
+            user='airflow',
+            password='airflow'
+        )
+        cur = conn.cursor()
+        
+        # Check if user exists
+        cur.execute("SELECT id FROM ab_user WHERE username = %s", (username,))
+        user = cur.fetchone()
+        
+        if user:
+            # Update password
+            cur.execute(
+                "UPDATE ab_user SET password = %s WHERE username = %s",
+                (hashed_password, username)
+            )
+            print(f"User {username} password updated")
+        else:
+            # Create new user
+            cur.execute(
+                "INSERT INTO ab_user (username, email, first_name, last_name, password, active, created_on) VALUES (%s, %s, %s, %s, %s, %s, now())",
+                (username, 'admin@example.com', 'Admin', 'User', hashed_password, True)
+            )
+            print(f"User {username} created")
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        EOF
     restart: "no"
 
   airflow-web:
     <<: *airflow-common
     command: api-server
+    entrypoint: /entrypoint-with-deps.sh
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -79,6 +123,7 @@ services:
   airflow-sched:
     <<: *airflow-common
     command: scheduler
+    entrypoint: /entrypoint-with-deps.sh
     restart: always
     depends_on:
       airflow-init:

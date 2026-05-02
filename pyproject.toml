@@ -20,6 +20,7 @@ google-cloud-bigquery = "^3.41"
 
 # Orchestration
 apache-airflow = {version = "^3.2", extras = ["google"]}
+astronomer-cosmos = "^1.14.1"
 
 # Transformation
 dbt-bigquery = "^1.11"
