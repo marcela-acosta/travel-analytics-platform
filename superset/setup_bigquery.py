@@ -2,10 +2,12 @@
 Run after Superset is up to register BigQuery + gold datasets automatically.
 Usage: python setup_bigquery.py
 """
+import os
 import time
 import requests
 
 BASE = "http://localhost:8088"
+_ADMIN_PASSWORD = os.environ["SUPERSET_ADMIN_PASSWORD"]
 SA_PATH = "/app/gcp/sa.json"
 PROJECT = "pipeline-health-mon-2026"
 GOLD_TABLES = [
@@ -35,7 +37,7 @@ def get_session_and_headers():
     session = requests.Session()
     # Step 1: login
     login = session.post(f"{BASE}/api/v1/security/login", json={
-        "username": "admin", "password": "admin123",
+        "username": "admin", "password": _ADMIN_PASSWORD,
         "provider": "db", "refresh": True,
     })
     login.raise_for_status()
@@ -95,4 +97,4 @@ if __name__ == "__main__":
     sess, hdrs = get_session_and_headers()
     db_id = create_database(sess, hdrs)
     create_datasets(sess, hdrs, db_id)
-    print(f"\nDone. Open http://localhost:8088  →  admin / admin123")
+    print(f"\nDone. Open http://localhost:8088  →  admin / (see SUPERSET_ADMIN_PASSWORD in .env)")

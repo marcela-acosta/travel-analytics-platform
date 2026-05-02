@@ -10,7 +10,7 @@ superset fab create-admin \
     --firstname Admin \
     --lastname Pipeline \
     --email admin@pipeline.com \
-    --password admin123 2>/dev/null || echo "(admin already exists)"
+    --password "${SUPERSET_ADMIN_PASSWORD:?SUPERSET_ADMIN_PASSWORD is not set}" 2>/dev/null || echo "(admin already exists)"
 
 echo ">>> Initializing roles and permissions..."
 superset init

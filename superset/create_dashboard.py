@@ -4,15 +4,17 @@ Run inside the superset container:
   docker exec superset-superset-1 python3 /app/superset/create_dashboard.py
 """
 import json
+import os
 import requests
 
 BASE = "http://localhost:8088"
+_ADMIN_PASSWORD = os.environ["SUPERSET_ADMIN_PASSWORD"]
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_session():
     s = requests.Session()
     tok = s.post(f"{BASE}/api/v1/security/login", json={
-        "username": "admin", "password": "admin123",
+        "username": "admin", "password": _ADMIN_PASSWORD,
         "provider": "db", "refresh": True,
     }).json()["access_token"]
     csrf = s.get(f"{BASE}/api/v1/security/csrf_token/",
@@ -337,7 +339,7 @@ def main():
         s.post(f"{BASE}/api/v1/chart/{cid}/favorites/")
 
     print(f"\nDone! Open: {BASE}/superset/dashboard/pipeline-health/")
-    print(f"     Login: admin / admin123")
+    print(f"     Login: admin / (see SUPERSET_ADMIN_PASSWORD in .env)")
 
 
 if __name__ == "__main__":
