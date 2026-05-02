@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -31,7 +31,6 @@ PRODUCT_COLORS = {
 }
 PRIMARY   = "#1e5fa8"
 STAGE_BLUES = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981", "#ef4444"]
-
 
 def get_mock_data() -> pd.DataFrame:
     rng = np.random.default_rng(42)
@@ -451,6 +450,8 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
 st.set_page_config(page_title="Pipeline Health Monitor", page_icon="📊",
                    layout="wide", initial_sidebar_state="expanded")
 
+st_autorefresh(interval=60_000, key="autorefresh")
+
 st.markdown("""
 <style>
 [data-testid="stSidebar"] { background-color: #0f2744; }
@@ -474,6 +475,8 @@ raw = load_data()
 with st.sidebar:
     st.markdown("## 📊 Pipeline Health")
     st.markdown("---")
+    st.link_button("🔗 Open in Superset", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=True)
+    st.markdown("---")
     st.markdown("**Filters**")
     selected_regions = st.multiselect("Region", options=REGIONS, default=REGIONS)
     selected_products = st.multiselect("Product", options=PRODUCTS, default=PRODUCTS)
@@ -491,7 +494,7 @@ if show_stale_only:
     df = df[df["is_stale"]].copy()
 
 st.markdown("# Pipeline Health Monitor")
-st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"🟢 LIVE · updated: {datetime.now().strftime('%H:%M:%S')} · auto-refreshes every 60 s")
 
 if df.empty:
     st.error("No data matches the selected filters.")
@@ -544,454 +547,15 @@ with _rb2:
 
 st.divider()
 
-
-def _dark(fig):
-    """Transparent background + light text for dark-themed Streamlit dashboard."""
-    fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#d6e4f7"),
-        title_font_color="#d6e4f7",
-    )
-    fig.update_xaxes(
-        gridcolor="rgba(255,255,255,0.08)",
-        zerolinecolor="rgba(255,255,255,0.08)",
-        tickfont=dict(color="#8aafd4"),
-        title_font=dict(color="#8aafd4"),
-    )
-    fig.update_yaxes(
-        gridcolor="rgba(255,255,255,0.08)",
-        zerolinecolor="rgba(255,255,255,0.08)",
-        tickfont=dict(color="#8aafd4"),
-        title_font=dict(color="#8aafd4"),
-        selector=dict(side="left"),
-    )
-    fig.update_traces(
-        textfont=dict(color="#d6e4f7"),
-        selector=dict(textposition="outside"),
-    )
-    fig.update_traces(
-        textfont=dict(color="#8aafd4"),
-        selector=dict(textposition="middle right"),
-    )
-    return fig
-
-
-# ── Funnel + Conversion rates ─────────────────────────────────────────────────
-st.subheader("Pipeline Funnel")
-
-funnel_data = stage_agg[stage_agg["stage"] != "Lost"].copy()
-funnel_data["stage"] = pd.Categorical(funnel_data["stage"],
-    categories=[s for s in STAGE_ORDER if s != "Lost"], ordered=True)
-funnel_data = funnel_data.sort_values("stage")
-
-fn_left, fn_right = st.columns([3, 1])
-with fn_left:
-    _stages  = funnel_data["stage"].astype(str).tolist()
-    _opps    = funnel_data["total_opportunities"].tolist()
-    _fig = go.Figure(go.Bar(
-        y=_stages, x=_opps, orientation="h",
-        marker_color=STAGE_BLUES[:len(_stages)],
-        text=[f"  {int(v):,}" for v in _opps],
-        textposition="inside", insidetextanchor="end",
-        textfont=dict(color="white", size=12, family="Arial Black"),
-        customdata=funnel_data[["total_value","weighted_value","stale_opportunities"]].values,
-        hovertemplate=(
-            "<b>%{y}</b><br>Opportunities: %{x:,}<br>"
-            "Pipeline Value: $%{customdata[0]:,.0f}<br>"
-            "Weighted: $%{customdata[1]:,.0f}<br>"
-            "Stale: %{customdata[2]:.0f}<extra></extra>"
-        ),
-    ))
-    for i in range(len(funnel_data) - 1):
-        _curr = funnel_data.iloc[i]["total_opportunities"]
-        _nxt  = funnel_data.iloc[i+1]["total_opportunities"]
-        _rate = round(_nxt / _curr * 100, 1) if _curr > 0 else 0
-        _fig.add_annotation(
-            x=_nxt * 0.55, y=funnel_data.iloc[i+1]["stage"],
-            text=f"↓ {_rate}%", showarrow=False,
-            font=dict(color="white", size=11, family="Arial Black"),
-        )
-    _fig.update_layout(
-        plot_bgcolor="white", paper_bgcolor="white", showlegend=False, height=300,
-        margin=dict(l=10, r=10, t=10, b=30),
-        xaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
-                   tickfont=dict(size=10, color="#4a6b8a")),
-        yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False,
-                   categoryorder="array",
-                   categoryarray=[s for s in STAGE_ORDER if s != "Lost"]),
-    )
-    st.plotly_chart(_dark(_fig), use_container_width=True)
-
-with fn_right:
-    st.markdown("**Conversion rates**")
-    counts = stage_agg.set_index("stage")["total_opportunities"].to_dict()
-    conv_rows = []
-    active = [s for s in STAGE_ORDER[:-1] if s in counts]
-    for i in range(len(active) - 1):
-        src, dst = active[i], active[i+1]
-        rate = (counts.get(dst,0) / counts[src] * 100) if counts.get(src,0) > 0 else 0
-        color = "#16a34a" if rate >= 50 else "#ea580c" if rate >= 25 else "#dc2626"
-        conv_rows.append(f"""
-        <div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:6px 0;border-bottom:1px solid #e0ebf8;">
-          <span style="font-size:0.82rem;color:#4a6b8a;">{src} → {dst}</span>
-          <span style="font-weight:700;color:{color};font-size:0.95rem;">{rate:.0f}%</span>
-        </div>""")
-    if closed > 0:
-        color = "#16a34a" if win_rate >= 40 else "#ea580c" if win_rate >= 20 else "#dc2626"
-        conv_rows.append(f"""
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
-          <span style="font-size:0.82rem;color:#4a6b8a;">Won / Closed</span>
-          <span style="font-weight:700;color:{color};font-size:0.95rem;">{win_rate:.0f}%</span>
-        </div>""")
-    st.markdown("".join(conv_rows), unsafe_allow_html=True)
-
-st.divider()
-
-# ── Weighted forecast ─────────────────────────────────────────────────────────
-st.subheader("Weighted Revenue Forecast")
-
-forecast_data = stage_agg[stage_agg["stage"] != "Lost"][["stage","total_value","weighted_value"]].copy()
-_fc_idx = forecast_data.set_index("stage")
-_stages_fc = [s for s in STAGE_ORDER if s in _fc_idx.index and s != "Lost"]
-
-fc_left, fc_right = st.columns([2, 1])
-with fc_left:
-    _fig = go.Figure()
-    _fig.add_trace(go.Bar(
-        x=_stages_fc,
-        y=[_fc_idx.loc[s,"total_value"] for s in _stages_fc],
-        name="Total Pipeline", marker_color="#a8d4f5", offsetgroup=0,
-        hovertemplate="<b>%{x}</b><br>Total Pipeline: $%{y:,.0f}<extra></extra>",
-    ))
-    _fig.add_trace(go.Bar(
-        x=_stages_fc,
-        y=[_fc_idx.loc[s,"weighted_value"] for s in _stages_fc],
-        name="Weighted Forecast", marker_color=PRIMARY, offsetgroup=1,
-        hovertemplate="<b>%{x}</b><br>Weighted Forecast: $%{y:,.0f}<extra></extra>",
-    ))
-    _fig.update_layout(
-        barmode="group", height=300,
-        plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=10, r=10, t=10, b=30),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-                    font=dict(size=11)),
-        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
-        yaxis=dict(tickformat="$,.0f", gridcolor="#e0ebf8", showline=False,
-                   title="$ Value", tickfont=dict(size=10, color="#4a6b8a")),
-    )
-    st.plotly_chart(_dark(_fig), use_container_width=True)
-with fc_right:
-    st.markdown("**Win probability by stage**")
-    prob_df = pd.DataFrame(
-        [{"Stage":s, "Win Prob":f"{int(p*100)}%"}
-         for s,p in STAGE_WIN_PROB.items() if s not in ("Won","Lost")])
-    st.dataframe(prob_df, use_container_width=True, hide_index=True)
-    st.caption("Weighted Forecast = Pipeline Value × Win Probability")
-
-st.divider()
-
-# ── Product mix by region ─────────────────────────────────────────────────────
-st.subheader("Regional Breakdown & Product Mix")
-
-mix_data = (
-    df.groupby(["region","product"])
-    .agg(opportunities=("value","count"), total_value=("value","sum"))
-    .reset_index()
+# ── Superset Dashboard ───────────────────────────────────────────────────────
+st.markdown("### Explore the Full Interactive Dashboard")
+st.markdown(
+    "View pipeline funnel, conversion rates, regional breakdowns, agent leaderboard, "
+    "and more — with live filters and drill-down capabilities."
 )
-region_totals = df.groupby("region").agg(total_value=("value","sum")).reset_index()
-region_totals = region_totals.set_index("region").reindex(REGIONS).reset_index()
-
-_fig = go.Figure()
-for _prod in PRODUCTS:
-    _d = mix_data[mix_data["product"] == _prod].set_index("region").reindex(REGIONS, fill_value=0).reset_index()
-    _fig.add_trace(go.Bar(
-        name=_prod, x=_d["region"], y=_d["opportunities"],
-        marker_color=PRODUCT_COLORS[_prod],
-        hovertemplate=f"<b>{_prod}</b><br>%{{x}}: %{{y:,}} opps<extra></extra>",
-    ))
-_fig.add_trace(go.Scatter(
-    x=REGIONS, y=region_totals["total_value"].tolist(),
-    name="Pipeline Value", mode="lines+markers",
-    line=dict(color="#e05c2d", width=2.5),
-    marker=dict(size=8, color="#e05c2d"),
-    yaxis="y2",
-    hovertemplate="<b>%{x}</b><br>Pipeline Value: $%{y:,.0f}<extra></extra>",
-))
-_fig.update_layout(
-    barmode="stack", height=300,
-    plot_bgcolor="white", paper_bgcolor="white",
-    title=dict(text="Product Mix by Region", font=dict(size=13, color="#0f2744"), x=0),
-    margin=dict(l=10, r=10, t=50, b=30),
-    legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1,
-                font=dict(size=10)),
-    xaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
-    yaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
-               tickfont=dict(size=10, color="#4a6b8a")),
-    yaxis2=dict(title=dict(text="Pipeline Value ($)", font=dict(color="#e05c2d")),
-                overlaying="y", side="right", showgrid=False, tickformat="$,.0f",
-                tickfont=dict(size=10, color="#e05c2d")),
-)
-st.plotly_chart(_dark(_fig), use_container_width=True)
+st.link_button("🔗 Open in Superset Dashboard", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=False)
 
 st.divider()
-
-# ── Closing timeline ──────────────────────────────────────────────────────────
-st.subheader("Closing Timeline")
-
-bucket_agg = (
-    df[df["stage"].isin(["Prospecting","Qualified","Proposal","Negotiation"])]
-    .groupby("close_bucket", observed=True)
-    .agg(opportunities=("value","count"), pipeline_value=("value","sum"),
-         weighted_value=("weighted_value","sum"))
-    .reset_index()
-)
-bucket_agg["close_bucket"] = bucket_agg["close_bucket"].astype(str)
-BUCKET_COLORS = {"Overdue":"#c0392b","This Week":"#e67e22","This Month":PRIMARY,"Later":"#7ab8f5"}
-
-ct_left, ct_right = st.columns([1,1])
-with ct_left:
-    _bkt_agg_idx = bucket_agg.set_index("close_bucket")
-    _bkt_x = [b for b in CLOSE_BUCKET_ORDER if b in _bkt_agg_idx.index]
-    _bkt_y = [int(_bkt_agg_idx.loc[b,"opportunities"]) for b in _bkt_x]
-    _bkt_pv = [_bkt_agg_idx.loc[b,"pipeline_value"] for b in _bkt_x]
-    _fig = go.Figure(go.Bar(
-        x=_bkt_x, y=_bkt_y,
-        marker_color=[BUCKET_COLORS[b] for b in _bkt_x],
-        text=[str(v) for v in _bkt_y],
-        textposition="outside",
-        textfont=dict(color="#0f2744", size=13, family="Arial Black"),
-        customdata=_bkt_pv,
-        hovertemplate="%{x}: %{y:,}<br>Pipeline Value: $%{customdata:,.0f}<extra></extra>",
-    ))
-    _fig.update_layout(
-        height=260, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        margin=dict(l=10, r=10, t=20, b=10),
-        xaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
-        yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=10, color="#4a6b8a"),
-                   range=[0, max(_bkt_y) * 1.2 + 1] if _bkt_y else [0, 10]),
-    )
-    st.plotly_chart(_dark(_fig), use_container_width=True)
-
-with ct_right:
-    overdue   = bucket_agg[bucket_agg["close_bucket"] == "Overdue"]
-    this_week = bucket_agg[bucket_agg["close_bucket"] == "This Week"]
-    overdue_val = overdue["pipeline_value"].sum() if not overdue.empty else 0
-    week_val    = this_week["pipeline_value"].sum() if not this_week.empty else 0
-    overdue_n   = int(overdue["opportunities"].sum()) if not overdue.empty else 0
-    week_n      = int(this_week["opportunities"].sum()) if not this_week.empty else 0
-
-    st.markdown(f"""
-    <div style="display:flex;gap:12px;margin-bottom:12px;">
-        <div style="flex:1;background:#fef2f2;border-left:4px solid #c0392b;border-radius:8px;padding:16px 20px;">
-            <p style="color:#9b2323;font-size:0.75rem;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Overdue</p>
-            <p style="color:#c0392b;font-size:2rem;font-weight:700;margin:6px 0 2px;">{overdue_n:,}</p>
-            <p style="color:#c0392b;font-size:0.85rem;margin:0;">${overdue_val:,.0f} at risk</p>
-        </div>
-        <div style="flex:1;background:#fff7ed;border-left:4px solid #e67e22;border-radius:8px;padding:16px 20px;">
-            <p style="color:#92400e;font-size:0.75rem;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Closing This Week</p>
-            <p style="color:#e67e22;font-size:2rem;font-weight:700;margin:6px 0 2px;">{week_n:,}</p>
-            <p style="color:#e67e22;font-size:0.85rem;margin:0;">${week_val:,.0f} pipeline</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.dataframe(
-        bucket_agg.rename(columns={"close_bucket":"Bucket","opportunities":"Opps",
-            "pipeline_value":"Pipeline Value","weighted_value":"Weighted"})
-        .style.format({"Pipeline Value":"${:,.0f}","Weighted":"${:,.0f}"}),
-        use_container_width=True, hide_index=True,
-    )
-
-st.divider()
-
-# ── Agent leaderboard — lollipop ──────────────────────────────────────────────
-st.subheader("Agent Leaderboard")
-
-agent_agg = (
-    df.groupby("agent")
-    .agg(opportunities=("value","count"), total_value=("value","sum"))
-    .reset_index()
-)
-won_by_agent = df[df["stage"]=="Won"].groupby("agent").size().reset_index(name="won")
-agent_agg = agent_agg.merge(won_by_agent, on="agent", how="left").fillna({"won":0})
-agent_agg["won"]      = agent_agg["won"].astype(int)
-agent_agg["win_rate"] = (agent_agg["won"] / agent_agg["opportunities"] * 100).round(1)
-
-top_agents = agent_agg.sort_values("total_value", ascending=False).head(10)
-_ta = top_agents.iloc[::-1]  # reverse so highest value is at top
-_ta_agents  = _ta["agent"].tolist()
-_ta_values  = _ta["total_value"].tolist()
-_ta_wr      = _ta["win_rate"].tolist()
-_ta_opps    = _ta["opportunities"].tolist()
-_ta_won     = _ta["won"].tolist()
-
-_fig = go.Figure()
-# Stems
-_fig.add_trace(go.Bar(
-    y=_ta_agents, x=_ta_values, orientation="h",
-    marker_color="#c8ddf5", width=0.06,
-    showlegend=False, hoverinfo="skip",
-))
-# Dots colored by win rate
-_fig.add_trace(go.Scatter(
-    y=_ta_agents, x=_ta_values, mode="markers+text",
-    marker=dict(size=16, color=_ta_wr, colorscale="Blues", cmin=0, cmax=100,
-                showscale=True,
-                colorbar=dict(title=dict(text="Win Rate %", font=dict(size=10)),
-                              len=0.7, thickness=14, x=1.02,
-                              tickfont=dict(size=9))),
-    text=[f" {w:.0f}%" for w in _ta_wr],
-    textposition="middle right",
-    textfont=dict(size=10, color="#4a6b8a"),
-    customdata=list(zip(_ta_opps, _ta_won, _ta_wr)),
-    hovertemplate=(
-        "<b>%{y}</b><br>Pipeline Value: $%{x:,.0f}<br>"
-        "Opportunities: %{customdata[0]:,}<br>"
-        "Won: %{customdata[1]:,}<br>"
-        "Win Rate: %{customdata[2]:.1f}%<extra></extra>"
-    ),
-    showlegend=False,
-))
-_fig.update_layout(
-    barmode="overlay", height=340,
-    plot_bgcolor="white", paper_bgcolor="white",
-    title=dict(text="Top 10 Agents by Pipeline Value  (dot color = win rate %)",
-               font=dict(size=12, color="#0f2744"), x=0),
-    margin=dict(l=10, r=100, t=50, b=30),
-    xaxis=dict(title="Pipeline Value ($)", tickformat="$,.0f", gridcolor="#e0ebf8",
-               showline=False, tickfont=dict(size=10, color="#4a6b8a")),
-    yaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
-)
-st.plotly_chart(_dark(_fig), use_container_width=True)
-
-st.divider()
-
-# ── Conversion tables ─────────────────────────────────────────────────────────
-st.subheader("Conversion by Agent and Product")
-
-conv_agents   = load_conversion_by_agent().sort_values("win_rate_pct", ascending=False)
-conv_products = load_conversion_by_product().sort_values("win_rate_pct", ascending=False)
-
-def _highlight_low_conversion(val):
-    return "background-color: #ffcccc" if isinstance(val, float) and val < 20 else ""
-
-cv_left, cv_right = st.columns(2)
-with cv_left:
-    st.markdown("**Conversion by Agent**")
-    st.dataframe(
-        conv_agents.style
-        .map(_highlight_low_conversion, subset=["win_rate_pct"])
-        .format({"win_rate_pct": "{:.2f}%", "total_pipeline_value": "${:,.0f}", "won_value": "${:,.0f}"}),
-        use_container_width=True, hide_index=True,
-    )
-with cv_right:
-    st.markdown("**Conversion by Product**")
-    st.dataframe(
-        conv_products.style
-        .map(_highlight_low_conversion, subset=["win_rate_pct"])
-        .format({"win_rate_pct": "{:.2f}%", "total_pipeline_value": "${:,.0f}", "won_value": "${:,.0f}"}),
-        use_container_width=True, hide_index=True,
-    )
-
-st.divider()
-
-# ── Deal size + Stale ─────────────────────────────────────────────────────────
-st.subheader("Deal Size & Pipeline Health")
-
-avg_deal_stage = (
-    df.groupby("stage", observed=True)["value"].mean()
-    .reset_index().rename(columns={"value":"avg_deal_size"})
-)
-avg_deal_stage["stage"] = avg_deal_stage["stage"].astype(str)
-stale_chart_data = stage_agg[["stage","stale_opportunities"]].copy()
-
-ds_left, ds_right = st.columns(2)
-with ds_left:
-    _ds_idx    = avg_deal_stage.set_index("stage")
-    _ds_stages = [s for s in STAGE_ORDER if s in _ds_idx.index]
-    _ds_avgs   = [_ds_idx.loc[s,"avg_deal_size"] for s in _ds_stages]
-    _fig = go.Figure(go.Bar(
-        x=_ds_stages, y=_ds_avgs, marker_color=PRIMARY,
-        text=[f"${v:,.0f}" for v in _ds_avgs],
-        textposition="outside", textfont=dict(color="#0f2744", size=10),
-        hovertemplate="%{x}: $%{y:,.0f}<extra></extra>",
-    ))
-    _fig.update_layout(
-        title=dict(text="Avg Deal Size by Stage", font=dict(size=12, color="#0f2744"), x=0),
-        height=280, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        margin=dict(l=10, r=10, t=50, b=10),
-        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
-        yaxis=dict(tickformat="$,.0f", gridcolor="#e0ebf8", showline=False,
-                   tickfont=dict(size=9, color="#4a6b8a"),
-                   range=[0, max(_ds_avgs) * 1.2]),
-    )
-    st.plotly_chart(_dark(_fig), use_container_width=True)
-
-with ds_right:
-    _st_idx    = stale_chart_data.set_index("stage")
-    _st_stages = [s for s in STAGE_ORDER if s in _st_idx.index]
-    _st_vals   = [int(_st_idx.loc[s,"stale_opportunities"]) for s in _st_stages]
-    _fig = go.Figure(go.Bar(
-        x=_st_stages, y=_st_vals, marker_color="#e05c2d",
-        text=[str(v) for v in _st_vals],
-        textposition="outside", textfont=dict(color="#0f2744", size=10),
-        hovertemplate="%{x}: %{y} stale<extra></extra>",
-    ))
-    _fig.update_layout(
-        title=dict(text="Stale Opportunities by Stage (>14 days)", font=dict(size=12, color="#0f2744"), x=0),
-        height=280, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        margin=dict(l=10, r=10, t=50, b=10),
-        xaxis=dict(tickfont=dict(size=11, color="#0f2744"), showgrid=False),
-        yaxis=dict(gridcolor="#e0ebf8", showline=False, tickfont=dict(size=9, color="#4a6b8a"),
-                   range=[0, max(_st_vals) * 1.2 + 1]),
-    )
-    st.plotly_chart(_dark(_fig), use_container_width=True)
-
-st.divider()
-
-# ── Tables ────────────────────────────────────────────────────────────────────
-with st.expander("Stage Breakdown Table"):
-    st.dataframe(
-        stage_agg.style.format({
-            "total_value":"${:,.0f}","weighted_value":"${:,.0f}",
-            "total_opportunities":"{:,}","stale_opportunities":"{:,}",
-            "avg_days_since_update":"{:.1f}",
-        }),
-        use_container_width=True, hide_index=True,
-    )
-
-with st.expander("Agent Detail Table"):
-    st.dataframe(
-        agent_agg.sort_values("total_value", ascending=False)
-        .style.format({"total_value":"${:,.0f}","win_rate":"{:.1f}%"}),
-        use_container_width=True, hide_index=True,
-    )
-
-with st.expander("Stale Opportunities Detail"):
-    stale_df = df[df["is_stale"]].copy()
-    if stale_df.empty:
-        st.info("No stale opportunities with current filters.")
-    else:
-        st.dataframe(
-            stale_df[["opportunity_id","stage","agent","product","region",
-                       "value","days_since_update","days_until_expected_close"]]
-            .sort_values("days_since_update", ascending=False)
-            .style.format({"value":"${:,.0f}"}),
-            use_container_width=True, hide_index=True,
-        )
-
-
-st.divider()
-_rb4, _rb5, _rb6 = st.columns([1.3, 1.3, 9.4])
-with _rb4:
-    st.download_button("📄 Download Report", data=_pdf_bytes,
-        file_name=f"pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-        mime="application/pdf", use_container_width=True, key="dl_bot")
-with _rb5:
-    if st.button("📧 Send via Email", use_container_width=True, key="email_bot"):
-        st.session_state["_pdf_for_email"] = _pdf_bytes
-        st.session_state["_open_email_dlg"] = True
 
 # ── AI Chat + Email dialog ──────────────────────────────────────────────────
 import sys as _sys, os as _os

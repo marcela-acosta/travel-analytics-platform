@@ -61,7 +61,11 @@ normalized as (
         date_diff(expected_close_date, current_date(), day) as days_until_expected_close,
 
         case
-            when date_diff(current_date(), date(updated_at), day) > 14 then true
+            when stage in ('Won', 'Lost') then false
+            -- not updated in 14+ days
+            when date_diff(current_date(), date(updated_at), day) >= 14 then true
+            -- expected close within 30 days but still in active stage (at risk)
+            when date_diff(expected_close_date, current_date(), day) <= 30 then true
             else false
         end as is_stale
 

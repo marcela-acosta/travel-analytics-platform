@@ -13,7 +13,7 @@ with staged as (
     nullif(trim(product), '') as product,
     cast(value as float64) as value,
     upper(nullif(trim(region), '')) as region,
-    safe_cast(nullif(trim(expected_close_date), '') as date) as expected_close_date,
+    date(safe_cast(nullif(trim(expected_close_date), '') as timestamp)) as expected_close_date,
     safe_cast(nullif(trim(updated_at), '') as timestamp) as updated_at,
     ingested_at
   from staged

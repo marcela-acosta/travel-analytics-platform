@@ -1,0 +1,41 @@
+version: 2
+
+exposures:
+
+  - name: pipeline_health_streamlit
+    label: Pipeline Health Monitor (Streamlit)
+    type: dashboard
+    maturity: high
+    url: http://localhost:8501
+    description: >
+      Streamlit dashboard showing real-time CRM pipeline KPIs, funnel metrics,
+      and agent/product conversion rates. Auto-refreshes every 60 seconds.
+      Full interactive drill-down available via the linked Superset dashboard.
+    depends_on:
+      - ref('gld_dashboard_opportunities')
+      - ref('gld_pipeline_by_stage')
+      - ref('gld_conversion_by_agent')
+      - ref('gld_conversion_by_product')
+      - ref('gld_stale_opportunities')
+    owner:
+      name: Data Engineering
+      email: mpab28@gmail.com
+
+  - name: pipeline_health_superset
+    label: Pipeline Health Monitor (Superset)
+    type: dashboard
+    maturity: high
+    url: http://localhost:8088/superset/dashboard/pipeline-health/
+    description: >
+      Superset interactive dashboard with funnel, regional breakdown, agent
+      leaderboard, and conversion charts. Embedded link accessible from the
+      Streamlit app.
+    depends_on:
+      - ref('gld_dashboard_opportunities')
+      - ref('gld_pipeline_by_stage')
+      - ref('gld_conversion_by_agent')
+      - ref('gld_conversion_by_product')
+      - ref('gld_stale_opportunities')
+    owner:
+      name: Data Engineering
+      email: mpab28@gmail.com
