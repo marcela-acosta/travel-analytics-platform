@@ -8,7 +8,7 @@ End-to-end data pipeline for a travel-industry CRM. Real-time events flow from a
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         GCP  (pipeline-health-mon-2026)             │
+│               GCP · Travel Analytics Platform                        │
 │                                                                     │
 │   Simulator ──► Pub/Sub ──► Apache Beam ──► layer_bronze (BQ)      │
 │   (publisher.py)                                  │                 │
