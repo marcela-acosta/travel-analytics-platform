@@ -12,6 +12,7 @@ from openai import OpenAI
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 PROJECT_ID = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
+DATASET = os.environ.get("GCP_DATASET", "layer_gold")
 USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
 _DBT_PATH = Path(__file__).parent.parent / "dbt" / "dbt_health_monitor"
 
@@ -33,7 +34,7 @@ def _dbt_context() -> str:
         cols = ", ".join(c["name"] for c in m.get("columns", []))
         col_str = f" - columns: {cols}" if cols else ""
         lines.append(
-            f"- `{PROJECT_ID}.gold.{m['name']}`: {m.get('description', '')}{col_str}"
+            f"- `{PROJECT_ID}.{DATASET}.{m['name']}`: {m.get('description', '')}{col_str}"
         )
     return "\n".join(lines)
 
@@ -63,7 +64,7 @@ Products: Flight, Hotel, Car Rental, Package 2x, Package 3x
 Win probabilities: Prospecting 10%, Qualified 25%, Proposal 45%, Negotiation 70%, Won 100%
 
 ALWAYS use run_query to answer data questions. Use table name:
-  `{PROJECT_ID}.gold.gld_dashboard_opportunities`
+  `{PROJECT_ID}.{DATASET}.gld_dashboard_opportunities`
 
 When computing rates or percentages in SQL, always use CAST(numerator AS FLOAT) to avoid integer division.
 Be concise and business-friendly in your answers."""
@@ -111,7 +112,8 @@ def _execute(sql: str, mock_df) -> str:
     try:
         from google.cloud import bigquery
 
-        result = bigquery.Client(project=PROJECT_ID).query(sql).to_dataframe()
+        rows = bigquery.Client(project=PROJECT_ID).query(sql).result()
+        result = pd.DataFrame([dict(r) for r in rows])
         return result.to_json(orient="records", indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
