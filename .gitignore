@@ -8,3 +8,4 @@ __pycache__/
 .venv/
 airflow/.env
 gcp/
+infra/data/keys/
