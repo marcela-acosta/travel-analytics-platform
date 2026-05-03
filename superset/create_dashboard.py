@@ -1,5 +1,5 @@
 """
-Creates the full Pipeline Health dashboard in Superset via API.
+Creates the full Travel Analytics dashboard in Superset via API.
 Run inside the superset container:
   docker exec superset-superset-1 python3 /app/superset/create_dashboard.py
 """
@@ -314,7 +314,7 @@ def main():
     print("\nCreating dashboard...")
     layout = build_layout(chart_ids)
     dash_payload = {
-        "dashboard_title": "Pipeline Health Monitor",
+        "dashboard_title": "Travel Analytics Platform",
         "slug": "pipeline-health",
         "published": True,
         "owners": [],

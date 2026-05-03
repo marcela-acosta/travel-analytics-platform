@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -58,12 +57,14 @@ def load_data() -> pd.DataFrame:
         return get_mock_data()
     from google.cloud import bigquery
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    client = bigquery.Client()
-    df = client.query(f"""
+    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    client = bigquery.Client(project=project_id)
+    rows = client.query(f"""
         SELECT opportunity_id, stage, region, product, agent, value,
                days_since_update, days_until_expected_close, is_stale
-        FROM `{project_id}.gold.gld_dashboard_opportunities`
-    """).to_dataframe()
+        FROM `{project_id}.{dataset}.gld_dashboard_opportunities`
+    """).result()
+    df = pd.DataFrame([dict(r) for r in rows])
     df["stage"] = pd.Categorical(df["stage"], categories=STAGE_ORDER, ordered=True)
     return df.sort_values("stage").reset_index(drop=True)
 
@@ -114,12 +115,14 @@ def load_conversion_by_agent() -> pd.DataFrame:
         return get_mock_conversion_by_agent()
     from google.cloud import bigquery
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    client = bigquery.Client()
-    return client.query(f"""
+    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    client = bigquery.Client(project=project_id)
+    rows = client.query(f"""
         SELECT agent, total_opportunities, won_opportunities, lost_opportunities,
                win_rate_pct, total_pipeline_value, won_value
-        FROM `{project_id}.gold.gld_conversion_by_agent`
-    """).to_dataframe()
+        FROM `{project_id}.{dataset}.gld_conversion_by_agent`
+    """).result()
+    return pd.DataFrame([dict(r) for r in rows])
 
 
 @st.cache_data(ttl=60)
@@ -128,12 +131,14 @@ def load_conversion_by_product() -> pd.DataFrame:
         return get_mock_conversion_by_product()
     from google.cloud import bigquery
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    client = bigquery.Client()
-    return client.query(f"""
+    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    client = bigquery.Client(project=project_id)
+    rows = client.query(f"""
         SELECT product, total_opportunities, won_opportunities, lost_opportunities,
                win_rate_pct, total_pipeline_value, won_value
-        FROM `{project_id}.gold.gld_conversion_by_product`
-    """).to_dataframe()
+        FROM `{project_id}.{dataset}.gld_conversion_by_product`
+    """).result()
+    return pd.DataFrame([dict(r) for r in rows])
 
 
 def close_bucket(days: int) -> str:
@@ -175,7 +180,7 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
             self.set_xy(12, 6)
             self.set_font("Helvetica", "B", 14)
             self.set_text_color(*WHITE)
-            self.cell(120, 7, "Pipeline Health Monitor", ln=False)
+            self.cell(120, 7, "Travel Analytics Platform", ln=False)
             # Date (right-aligned)
             self.set_font("Helvetica", "", 8)
             self.set_text_color(160, 190, 220)
@@ -189,7 +194,7 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
             self.ln(1)
             self.set_font("Helvetica", "", 7)
             self.set_text_color(*GRAY)
-            self.cell(93, 5, "Pipeline Health Monitor - Confidential", align="L")
+            self.cell(93, 5, "Travel Analytics Platform - Confidential", align="L")
             self.cell(93, 5, f"Page {self.page_no()}", align="R")
 
     pdf = _PDF()
@@ -447,18 +452,11 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Pipeline Health Monitor", page_icon="📊",
-                   layout="wide", initial_sidebar_state="expanded")
-
-st_autorefresh(interval=60_000, key="autorefresh")
+st.set_page_config(page_title="Travel Analytics Platform", page_icon="📊",
+                   layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { background-color: #0f2744; }
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p,[data-testid="stSidebar"] span { color: #d6e4f7 !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color:#8aafd4 !important; font-size:0.8rem; }
 [data-testid="stMetric"] { background:#f0f5fb; border-left:4px solid #1e5fa8; padding:16px 20px; border-radius:8px; }
 [data-testid="stMetricLabel"] { color:#4a6b8a; font-size:0.85rem; }
 [data-testid="stMetricValue"] { color:#0f2744; font-weight:700; }
@@ -469,32 +467,11 @@ hr { border-color:#e0ebf8; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
 raw = load_data()
+df = raw.copy()
 
-with st.sidebar:
-    st.markdown("## 📊 Pipeline Health")
-    st.markdown("---")
-    st.link_button("🔗 Open in Superset", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=True)
-    st.markdown("---")
-    st.markdown("**Filters**")
-    selected_regions = st.multiselect("Region", options=REGIONS, default=REGIONS)
-    selected_products = st.multiselect("Product", options=PRODUCTS, default=PRODUCTS)
-    selected_agents = st.multiselect("Agent", options=AGENTS, default=AGENTS)
-    st.markdown("---")
-    show_stale_only = st.checkbox("Stale only (>14 days)")
-    st.markdown(f"<p>Refreshes every 60 s · {datetime.now().strftime('%H:%M')}</p>", unsafe_allow_html=True)
-
-df = raw[
-    raw["region"].isin(selected_regions)
-    & raw["product"].isin(selected_products)
-    & raw["agent"].isin(selected_agents)
-].copy()
-if show_stale_only:
-    df = df[df["is_stale"]].copy()
-
-st.markdown("# Pipeline Health Monitor")
-st.caption(f"🟢 LIVE · updated: {datetime.now().strftime('%H:%M:%S')} · auto-refreshes every 60 s")
+st.markdown("# Travel Analytics Platform")
+st.caption(f"🟢 LIVE · updated: {datetime.now().strftime('%H:%M:%S')} UTC · auto-refreshes every 60 s")
 
 if df.empty:
     st.error("No data matches the selected filters.")
@@ -553,7 +530,7 @@ st.markdown(
     "View pipeline funnel, conversion rates, regional breakdowns, agent leaderboard, "
     "and more — with live filters and drill-down capabilities."
 )
-st.link_button("🔗 Open in Superset Dashboard", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=False)
+st.link_button("🔗 Open in Superset", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=False)
 
 st.divider()
 
@@ -793,3 +770,4 @@ _components.html("""
 })();
 </script>
 """, height=0)
+

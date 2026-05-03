@@ -34,7 +34,7 @@ Leave that terminal open, then in your browser:
 gcloud compute ssh team-vm --zone us-central1-a --tunnel-through-iap
 
 # Inside the VM:
-cd /opt/pipeline-health-monitor/airflow
+cd /opt/travel-analytics-platform/airflow
 
 # Check service status
 sudo docker compose ps
@@ -46,7 +46,7 @@ sudo docker compose logs -f airflow-web
 sudo docker compose restart
 
 # Pull latest DAGs (after someone pushes to main)
-cd /opt/pipeline-health-monitor && sudo git pull
+cd /opt/travel-analytics-platform && sudo git pull
 cd airflow && sudo docker compose restart airflow-sched airflow-web
 ```
 
@@ -55,7 +55,7 @@ cd airflow && sudo docker compose restart airflow-sched airflow-web
 Drop your `.py` files into `dags/`, push to main, then on the VM:
 
 ```bash
-cd /opt/pipeline-health-monitor && sudo git pull
+cd /opt/travel-analytics-platform && sudo git pull
 ```
 
 The scheduler picks them up automatically — no restart needed for new DAGs.

@@ -3,7 +3,7 @@ version: 2
 exposures:
 
   - name: pipeline_health_streamlit
-    label: Pipeline Health Monitor (Streamlit)
+    label: Travel Analytics Platform (Streamlit)
     type: dashboard
     maturity: high
     url: http://localhost:8501
@@ -22,7 +22,7 @@ exposures:
       email: mpab28@gmail.com
 
   - name: pipeline_health_superset
-    label: Pipeline Health Monitor (Superset)
+    label: Travel Analytics Platform (Superset)
     type: dashboard
     maturity: high
     url: http://localhost:8088/superset/dashboard/pipeline-health/

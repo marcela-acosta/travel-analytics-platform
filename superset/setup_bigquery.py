@@ -58,7 +58,7 @@ def get_session_and_headers():
 
 def create_database(session, headers):
     payload = {
-        "database_name": "BigQuery · Pipeline Health",
+        "database_name": "BigQuery · Travel Analytics",
         "sqlalchemy_uri": f"bigquery://{PROJECT}?credentials_path={SA_PATH}",
         "expose_in_sqllab": True,
         "allow_run_async": False,
@@ -75,7 +75,7 @@ def create_database(session, headers):
         print("Database already registered, fetching id...")
         existing = session.get(f"{BASE}/api/v1/database/", headers=headers)
         for db in existing.json().get("result", []):
-            if "Pipeline Health" in db["database_name"]:
+            if "Travel Analytics" in db["database_name"]:
                 return db["id"]
     r.raise_for_status()
 

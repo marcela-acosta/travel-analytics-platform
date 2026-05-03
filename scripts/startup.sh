@@ -19,8 +19,8 @@ if [ -f "$BOOTSTRAP_MARKER" ]; then
 fi
 
 PROJECT_ID=pipeline-health-mon-2026
-REPO_URL=git@github.com:marcela-acosta/pipeline-health-monitor.git
-PROJECT_DIR=/opt/pipeline-health-monitor
+REPO_URL=git@github.com:marcela-acosta/travel-analytics-platform.git
+PROJECT_DIR=/opt/travel-analytics-platform
 
 # --- 1. Install base packages -----------------------------------------------
 export DEBIAN_FRONTEND=noninteractive

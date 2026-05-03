@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pipeline-health-monitor"
+name = "travel-analytics-platform"
 version = "0.1.0"
 description = "Pipeline health monitoring with Airflow, dbt, Beam and Streamlit"
 authors = []

@@ -1,4 +1,4 @@
-# Infraestructura — Pipeline Health Monitor
+# Infraestructura — Travel Analytics Platform
 
 Terraform para provisionar los recursos GCP del proyecto.
 

@@ -1,5 +1,5 @@
 """
-Builds a Superset-importable ZIP (YAML format) for the Pipeline Health dashboard.
+Builds a Superset-importable ZIP (YAML format) for the Travel Analytics dashboard.
 Run: python3 build_import.py  -> produces pipeline_dashboard.zip
 Then import via Superset UI: Settings > Import Dashboards
 Or via API (run_import.py).
@@ -209,14 +209,14 @@ def build_zip(path="pipeline_dashboard.zip"):
 
         # database
         db_yaml = {
-            "database_name": "BigQuery Pipeline Health",
+            "database_name": "BigQuery Travel Analytics",
             "sqlalchemy_uri": SQLURI,
             "uuid": DB_UUID,
             "allow_run_async": False,
             "expose_in_sqllab": True,
             "version": "1.0.0",
         }
-        zf.writestr("databases/BigQuery_Pipeline_Health.yaml",
+        zf.writestr("databases/BigQuery_Travel_Analytics.yaml",
                     yaml.dump(db_yaml, allow_unicode=True))
 
         # datasets
@@ -230,7 +230,7 @@ def build_zip(path="pipeline_dashboard.zip"):
                 "metrics": [],
                 "version": "1.0.0",
             }
-            zf.writestr(f"datasets/BigQuery_Pipeline_Health/{tname}.yaml",
+            zf.writestr(f"datasets/BigQuery_Travel_Analytics/{tname}.yaml",
                         yaml.dump(ds_yaml, allow_unicode=True))
 
         # charts
@@ -252,7 +252,7 @@ def build_zip(path="pipeline_dashboard.zip"):
         # dashboard
         position = build_position(chart_uuids)
         dash_yaml = {
-            "dashboard_title": "Pipeline Health Monitor",
+            "dashboard_title": "Travel Analytics Platform",
             "uuid": DASH_UUID,
             "slug": "pipeline-health",
             "published": True,
@@ -261,7 +261,7 @@ def build_zip(path="pipeline_dashboard.zip"):
                          "refresh_frequency": 0},
             "version": "1.0.0",
         }
-        zf.writestr("dashboards/Pipeline_Health_Monitor.yaml",
+        zf.writestr("dashboards/Travel_Analytics_Platform.yaml",
                     yaml.dump(dash_yaml, allow_unicode=True))
 
     with open(path, "wb") as f:

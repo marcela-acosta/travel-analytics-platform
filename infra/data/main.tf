@@ -52,7 +52,7 @@ resource "google_storage_bucket" "gold" {
 # ── Service Account ───────────────────────────────────────
 resource "google_service_account" "pipeline_sa" {
   account_id   = "pipeline-sa"
-  display_name = "Pipeline Health Monitor SA"
+  display_name = "Travel Analytics Platform SA"
 }
 
 resource "google_service_account_key" "pipeline_sa_key" {

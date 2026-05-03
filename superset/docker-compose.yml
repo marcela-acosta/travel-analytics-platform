@@ -6,7 +6,7 @@ x-env: &env
   DB_USER: superset
   DB_PASS: superset
   REDIS_HOST: redis
-  SUPERSET_SECRET_KEY: "pipeline-health-monitor-superset-2026"
+  SUPERSET_SECRET_KEY: "travel-analytics-platform-superset-2026"
   SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
 
 services:

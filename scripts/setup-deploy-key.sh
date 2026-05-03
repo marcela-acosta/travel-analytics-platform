@@ -15,7 +15,7 @@
 set -euo pipefail
 
 PROJECT_ID=pipeline-health-mon-2026
-REPO=marcela-acosta/pipeline-health-monitor
+REPO=marcela-acosta/travel-analytics-platform
 SECRET_NAME=github-deploy-key
 KEY_PATH=$(mktemp -d)/id_ed25519
 
