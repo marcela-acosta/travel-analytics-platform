@@ -1,4 +1,4 @@
-{{ config(tags=["gold"]) }}
+{{ config(tags=["gold"], materialized="view") }}
 
 with silver as (
     select *
