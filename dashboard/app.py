@@ -655,24 +655,8 @@ stage_agg = (
 stage_agg["stage"] = stage_agg["stage"].astype(str)
 
 
-_pdf_bytes = _build_pdf(
-    df, stage_agg, load_conversion_by_agent(), load_conversion_by_product()
-)
-
-_rb1, _rb2, _rb3 = st.columns([1.3, 1.3, 9.4])
-with _rb1:
-    st.download_button(
-        "📄 Download Report",
-        data=_pdf_bytes,
-        file_name=f"pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-        key="dl_top",
-    )
-with _rb2:
-    if st.button("📧 Send via Email", use_container_width=True, key="email_top"):
-        st.session_state["_pdf_for_email"] = _pdf_bytes
-        st.session_state["_open_email_dlg"] = True
+if st.button("📧 Send invitation to the platform via email", key="email_top"):
+    st.session_state["_open_email_dlg"] = True
 
 st.divider()
 
@@ -702,7 +686,6 @@ for _k, _v in [
     ("chat_history", []),
     ("chat_open", False),
     ("_open_email_dlg", False),
-    ("_pdf_for_email", None),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -714,18 +697,14 @@ _SUGGESTIONS = [
 ]
 
 
-@st.dialog("Send Report via Email")
+@st.dialog("Send invitation via email")
 def _email_dialog():
-    _pdf = st.session_state.get("_pdf_for_email", b"")
-    st.markdown("Enter the recipient's address and we'll attach the PDF report.")
+    _platform_url = os.environ.get("PLATFORM_URL", "http://localhost:8501")
+    st.markdown("Send an invitation to visit the Travel Analytics Platform.")
+    _from_name = st.text_input("Your name", placeholder="Jane Smith")
     _to = st.text_input("Recipient email", placeholder="colleague@company.com")
     _subj = st.text_input(
-        "Subject", value=f"Pipeline Report - {datetime.now().strftime('%Y-%m-%d')}"
-    )
-    _body = st.text_area(
-        "Message (optional)",
-        placeholder="Hi, please find the pipeline report attached.",
-        height=80,
+        "Subject", value="Invitation to the Travel Analytics Platform"
     )
     _c1, _c2 = st.columns(2)
     if _c1.button("Send", type="primary", use_container_width=True):
@@ -739,41 +718,37 @@ def _email_dialog():
                 st.warning(
                     "SMTP not configured. Add **SMTP_HOST**, **SMTP_USER** and **SMTP_PASSWORD** to your `.env` file to enable sending."
                 )
-                st.download_button(
-                    "📄 Download PDF instead",
-                    data=_pdf,
-                    file_name=f"pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
             else:
                 import smtplib
                 from email.mime.multipart import MIMEMultipart
                 from email.mime.text import MIMEText
-                from email.mime.base import MIMEBase
-                from email import encoders
 
+                _inviter = _from_name.strip() or _su
+                _html = f"""
+<html><body style="font-family:Arial,sans-serif;color:#0f2744;">
+  <p>{_inviter} is inviting you to visit the <strong>Travel Analytics Platform</strong>.</p>
+  <p>
+    <a href="{_platform_url}" style="color:#1e5fa8;font-weight:600;">
+      Click here to access the platform
+    </a>
+  </p>
+  <p style="color:#4a6b8a;font-size:0.85em;">
+    Or copy this link: {_platform_url}
+  </p>
+</body></html>"""
+                _plain = (
+                    f"{_inviter} is inviting you to visit the Travel Analytics Platform.\n\n"
+                    f"Access it here: {_platform_url}"
+                )
                 try:
-                    _mail = MIMEMultipart()
+                    _mail = MIMEMultipart("alternative")
                     _mail["From"], _mail["To"], _mail["Subject"] = _su, _to, _subj
-                    _mail.attach(
-                        MIMEText(
-                            _body or "Please find the pipeline report attached.",
-                            "plain",
-                        )
-                    )
-                    _part = MIMEBase("application", "octet-stream")
-                    _part.set_payload(_pdf)
-                    encoders.encode_base64(_part)
-                    _part.add_header(
-                        "Content-Disposition",
-                        f"attachment; filename=pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    )
-                    _mail.attach(_part)
+                    _mail.attach(MIMEText(_plain, "plain"))
+                    _mail.attach(MIMEText(_html, "html"))
                     with smtplib.SMTP_SSL(_sh, 465) as _srv:
                         _srv.login(_su, _sp)
                         _srv.sendmail(_su, _to, _mail.as_string())
-                    st.success(f"Report sent to {_to} ✓")
+                    st.success(f"Invitation sent to {_to} ✓")
                 except Exception as _e:
                     st.error(f"Could not send: {_e}")
     if _c2.button("Cancel", use_container_width=True):
