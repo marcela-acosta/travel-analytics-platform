@@ -3,6 +3,11 @@ version: 2
 models:
   - name: gld_dashboard_opportunities
     description: Dashboard-ready opportunity-level CRM table from Silver.
+    tests:
+      - elementary.volume_anomalies:
+          timestamp_column: null
+          sensitivity: 3
+      - elementary.schema_changes
     columns:
       - name: opportunity_id
         tests:
@@ -18,12 +23,25 @@ models:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
+          - elementary.column_anomalies:
+              column_anomalies:
+                - null_count
+                - zero_count
 
   - name: gld_pipeline_by_stage
     description: Aggregated pipeline metrics by sales stage.
+    tests:
+      - elementary.volume_anomalies:
+          timestamp_column: null
+          sensitivity: 3
+      - elementary.schema_changes
 
   - name: gld_conversion_by_agent
     description: Conversion and value metrics by sales agent.
+    tests:
+      - elementary.volume_anomalies:
+          timestamp_column: null
+          sensitivity: 3
     columns:
       - name: agent
         tests:
@@ -49,6 +67,10 @@ models:
 
   - name: gld_conversion_by_product
     description: Conversion and value metrics by product.
+    tests:
+      - elementary.volume_anomalies:
+          timestamp_column: null
+          sensitivity: 3
     columns:
       - name: product
         tests:

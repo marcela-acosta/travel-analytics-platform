@@ -2,10 +2,12 @@
 Travel Analytics Platform — dbt orchestration DAG.
 
 Runs every hour:
-  dbt run (bronze) → dbt run (silver) → dbt run (gold) → dbt test (gold)
+  dbt run (bronze) → dbt run (silver) → dbt run (gold)
+    → dbt test (gold) → dbt run (elementary)
 
 dbt project is mounted at /opt/airflow/dbt/dbt_health_monitor.
 BigQuery auth is handled via GOOGLE_APPLICATION_CREDENTIALS (service account).
+Elementary models write observability metadata to the layer_elementary dataset.
 """
 
 from datetime import datetime, timedelta
@@ -52,4 +54,9 @@ with DAG(
         bash_command=f"{DBT_CMD} test --select gold --profiles-dir . 2>&1",
     )
 
-    run_bronze >> run_silver >> run_gold >> test_gold
+    run_elementary = BashOperator(
+        task_id="dbt_run_elementary",
+        bash_command=f"{DBT_CMD} run --select elementary --profiles-dir . 2>&1",
+    )
+
+    run_bronze >> run_silver >> run_gold >> test_gold >> run_elementary

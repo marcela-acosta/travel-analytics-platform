@@ -20,6 +20,9 @@ vars:
   raw_dataset: "raw_health_monitor"
   bronze_dataset: "bronze"
 
+on-run-end:
+  - "{{ elementary.on_run_end() }}"
+
 models:
   dbt_health_monitor:
     +persist_docs:
@@ -41,6 +44,10 @@ models:
     gold:
       +schema: gold
       +materialized: table
+
+  elementary:
+    +schema: elementary
+    +database: pipeline-health-mon-2026
 
 seeds:
   dbt_health_monitor:
