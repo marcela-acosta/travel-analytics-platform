@@ -14,13 +14,18 @@ x-airflow-common: &airflow-common
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow  # pragma: allowlist secret
-    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__FERNET_KEY: 'j3IUGZ9WEkmwIYcG2ipyVqS6_SWxlvRTdujaYYGTuMY='  # pragma: allowlist secret
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/keys/pipeline-sa.json
     # GCP connection used by Cosmos — Admin > Connections > google_cloud_default
     AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?key_path=%2Fopt%2Fairflow%2Fkeys%2Fpipeline-sa.json'
+    # Airflow 3.x: task subprocesses in the scheduler container must reach the
+    # execution API on the api-server container (not localhost).
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-web:8080/execution'
+    # Shared JWT secret so scheduler and api-server sign/verify tokens with the same key.
+    AIRFLOW__API_AUTH__JWT_SECRET: 'JWOuDlBm-lzs4boKZWF-HYteZpthMkSHPAlM3c5DjSs='  # pragma: allowlist secret
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs

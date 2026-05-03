@@ -2,4 +2,7 @@ packages:
   - name: dbt_utils
     package: dbt-labs/dbt_utils
     version: 1.3.3
-sha1_hash: a4da77dcded39caf20bd661f0098cbffd9735800
+  - name: elementary
+    package: elementary-data/elementary
+    version: 0.15.2
+sha1_hash: 7dc681357a7ce5617d033ca074a53e9a3413f253  # pragma: allowlist secret
