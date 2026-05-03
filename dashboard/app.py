@@ -612,9 +612,6 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-[data-testid="stMetric"] { background:#f0f5fb; border-left:4px solid #1e5fa8; padding:16px 20px; border-radius:8px; }
-[data-testid="stMetricLabel"] { color:#4a6b8a; font-size:0.85rem; }
-[data-testid="stMetricValue"] { color:#0f2744; font-weight:700; }
 [data-baseweb="tag"] { background-color:#1e5fa8 !important; }
 [data-baseweb="tag"] span { color:#ffffff !important; }
 h2 { color:#0f2744 !important; border-bottom:2px solid #e0ebf8; padding-bottom:6px; }
@@ -657,25 +654,6 @@ stage_agg = (
 )
 stage_agg["stage"] = stage_agg["stage"].astype(str)
 
-# ── KPIs ──────────────────────────────────────────────────────────────────────
-won_opps = len(df[df["stage"] == "Won"])
-lost_opps = len(df[df["stage"] == "Lost"])
-closed = won_opps + lost_opps
-win_rate = (won_opps / closed * 100) if closed > 0 else 0
-avg_deal = df[df["stage"] == "Won"]["value"].mean() if won_opps > 0 else 0
-stale_count = int(df["is_stale"].sum())
-stale_pct = round(stale_count / len(df) * 100, 1) if len(df) > 0 else 0
-weighted_total = df["weighted_value"].sum()
-
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-k1.metric("Total Opportunities", f"{len(df):,}")
-k2.metric("Pipeline Value", f"${df['value'].sum():,.0f}")
-k3.metric("Weighted Forecast", f"${weighted_total:,.0f}")
-k4.metric("Win Rate", f"{win_rate:.1f}%")
-k5.metric("Avg Won Deal", f"${avg_deal:,.0f}")
-k6.metric(
-    "Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse"
-)
 
 _pdf_bytes = _build_pdf(
     df, stage_agg, load_conversion_by_agent(), load_conversion_by_product()
