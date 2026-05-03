@@ -660,14 +660,14 @@ if st.button("📧 Send invitation to the platform via email", key="email_top"):
 
 st.divider()
 
-# ── Superset Dashboard ───────────────────────────────────────────────────────
+# ── Travel Analytics Platform (Superset) ─────────────────────────────────────
 st.markdown("### Explore the Full Interactive Dashboard")
 st.markdown(
     "View pipeline funnel, conversion rates, regional breakdowns, agent leaderboard, "
     "and more — with live filters and drill-down capabilities."
 )
 st.link_button(
-    "🔗 Open in Superset",
+    "🔗 Open Travel Analytics Platform",
     "http://localhost:8088/superset/dashboard/pipeline-health/",
     use_container_width=False,
 )
@@ -699,7 +699,7 @@ _SUGGESTIONS = [
 
 @st.dialog("Send invitation via email")
 def _email_dialog():
-    _platform_url = os.environ.get("PLATFORM_URL", "http://localhost:8501")
+    _platform_url = os.environ.get("PLATFORM_URL", "http://34.70.112.25:8501/")
     st.markdown("Send an invitation to visit the Travel Analytics Platform.")
     _from_name = st.text_input("Your name", placeholder="Jane Smith")
     _to = st.text_input("Recipient email", placeholder="colleague@company.com")
@@ -731,9 +731,6 @@ def _email_dialog():
     <a href="{_platform_url}" style="color:#1e5fa8;font-weight:600;">
       Click here to access the platform
     </a>
-  </p>
-  <p style="color:#4a6b8a;font-size:0.85em;">
-    Or copy this link: {_platform_url}
   </p>
 </body></html>"""
                 _plain = (
