@@ -1,22 +1,53 @@
 """
-Travel Analytics Platform — dbt orchestration DAG.
+Travel Analytics Platform — dbt orchestration DAG using Astronomer Cosmos.
 
-Runs every hour:
-  dbt run (bronze) → dbt run (silver) → dbt run (gold)
-    → dbt test (gold) → dbt run (elementary)
+Cosmos converts each dbt model into an individual Airflow task, giving
+fine-grained visibility, retries per model, and the full dbt lineage
+graph rendered in the Airflow UI.
 
-dbt project is mounted at /opt/airflow/dbt/dbt_health_monitor.
-BigQuery auth is handled via GOOGLE_APPLICATION_CREDENTIALS (service account).
-Elementary models write observability metadata to the layer_elementary dataset.
+Pipeline:
+  [DbtTaskGroup: bronze → silver → gold (one task per model)]
+    → dbt run --select elementary  (Elementary observability tables)
+
+Prerequisites:
+  - Airflow connection "google_cloud_default" (Google Cloud Platform type)
+    pointing to /opt/airflow/keys/pipeline-sa.json
+    Set automatically via AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT in docker-compose.
+  - dbt-bigquery and astronomer-cosmos installed (see airflow/Dockerfile).
+  - Run `dbt deps` once inside the container to install dbt packages.
 """
 
 from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from cosmos import (
+    DbtTaskGroup,
+    ExecutionConfig,
+    ProfileConfig,
+    ProjectConfig,
+    RenderConfig,
+)
+from cosmos.constants import LoadMode
+from cosmos.profiles import GoogleCloudServiceAccountFileProfileMapping
 
+GCP_CONN_ID = "google_cloud_default"
 DBT_DIR = "/opt/airflow/dbt/dbt_health_monitor"
-DBT_CMD = f"cd {DBT_DIR} && dbt"
+DBT_BIN = "/home/airflow/.local/bin/dbt"
+
+profile_config = ProfileConfig(
+    profile_name="dbt_health_monitor",
+    target_name="dev",
+    profile_mapping=GoogleCloudServiceAccountFileProfileMapping(
+        conn_id=GCP_CONN_ID,
+        profile_args={
+            "project": "pipeline-health-mon-2026",
+            "dataset": "layer",
+            "location": "us-central1",
+            "threads": 4,
+        },
+    ),
+)
 
 default_args = {
     "owner": "data-engineering",
@@ -27,36 +58,24 @@ default_args = {
 
 with DAG(
     dag_id="dbt_pipeline",
-    description="Bronze → Silver → Gold transformation + tests",
+    description="dbt bronze→silver→gold via Cosmos + Elementary observability",
     start_date=datetime(2026, 1, 1),
     schedule="@hourly",
     catchup=False,
     default_args=default_args,
-    tags=["dbt", "bigquery", "gold"],
+    tags=["dbt", "cosmos", "bigquery"],
 ) as dag:
-    run_bronze = BashOperator(
-        task_id="dbt_run_bronze",
-        bash_command=f"{DBT_CMD} run --select bronze --profiles-dir . 2>&1",
-    )
-
-    run_silver = BashOperator(
-        task_id="dbt_run_silver",
-        bash_command=f"{DBT_CMD} run --select silver --profiles-dir . 2>&1",
-    )
-
-    run_gold = BashOperator(
-        task_id="dbt_run_gold",
-        bash_command=f"{DBT_CMD} run --select gold --profiles-dir . 2>&1",
-    )
-
-    test_gold = BashOperator(
-        task_id="dbt_test_gold",
-        bash_command=f"{DBT_CMD} test --select gold --profiles-dir . 2>&1",
+    transform = DbtTaskGroup(
+        group_id="transform",
+        project_config=ProjectConfig(dbt_project_path=DBT_DIR),
+        profile_config=profile_config,
+        execution_config=ExecutionConfig(dbt_executable_path=DBT_BIN),
+        render_config=RenderConfig(load_method=LoadMode.DBT_LS),
     )
 
     run_elementary = BashOperator(
         task_id="dbt_run_elementary",
-        bash_command=f"{DBT_CMD} run --select elementary --profiles-dir . 2>&1",
+        bash_command=f"cd {DBT_DIR} && {DBT_BIN} run --select elementary --profiles-dir . 2>&1",
     )
 
-    run_bronze >> run_silver >> run_gold >> test_gold >> run_elementary
+    transform >> run_elementary

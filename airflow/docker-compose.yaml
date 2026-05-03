@@ -19,6 +19,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/keys/pipeline-sa.json
+    # GCP connection used by Cosmos — Admin > Connections > google_cloud_default
+    AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?key_path=%2Fopt%2Fairflow%2Fkeys%2Fpipeline-sa.json'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
