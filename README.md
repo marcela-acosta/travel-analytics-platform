@@ -34,7 +34,7 @@ End-to-end data pipeline for a travel-industry CRM. Real-time events flow from a
 | Data warehouse | Google BigQuery (medallion: bronze / silver / gold) |
 | Orchestration | Apache Airflow 3.x (LocalExecutor, Docker Compose) |
 | Transformations | dbt + dbt-bigquery |
-| KPI dashboard | Streamlit + Plotly |
+| KPI dashboard | Streamlit · Plotly (chart rendering for PDF export) |
 | BI dashboard | Apache Superset |
 | Infrastructure | Terraform (GCP resources) |
 | Linting & safety | ruff, detect-secrets (pre-commit hooks) |
@@ -79,7 +79,7 @@ Architecture decisions are documented in [docs/adr/](docs/adr/).
 ```bash
 git clone git@github.com:marcela-acosta/travel-analytics-platform.git
 cd travel-analytics-platform
-cp .env.example .env   # fill in GCP_PROJECT, GCP_DATASET, GEMINI_API_KEY, etc.
+cp .env.example .env   # fill in GCP_PROJECT, GCP_DATASET, OPENAI_API_KEY, etc.
 ```
 
 ### 2. Install Python dependencies
@@ -171,8 +171,7 @@ Lineage graph (including dashboard exposures) at **http://localhost:8082**
 | `GCP_PROJECT` | GCP project ID | `pipeline-health-mon-2026` |
 | `GCP_DATASET` | BigQuery gold dataset | `layer_gold` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON | — |
-| `GEMINI_API_KEY` | Gemini API key for AI chat | — |
-| `OPENAI_API_KEY` | OpenAI fallback key for AI chat | — |
+| `OPENAI_API_KEY` | OpenAI key for the AI chat feature. Billed per token — typical usage costs < $0.01 per conversation with `gpt-4o-mini`. See [openai.com/pricing](https://openai.com/pricing). | — |
 | `SUPERSET_ADMIN_PASSWORD` | Superset admin password | — |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | Email report delivery | — |
 
