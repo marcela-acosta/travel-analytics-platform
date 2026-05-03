@@ -1,6 +1,6 @@
 import os
 import sys
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -12,7 +12,9 @@ _st.multiselect = lambda label, options=None, default=None, **kw: (
     default if default is not None else (options or [])
 )
 _st.checkbox = lambda *a, **kw: False
-_st.columns = lambda n, **kw: [MagicMock() for _ in range(n if isinstance(n, int) else len(n))]
+_st.columns = lambda n, **kw: [
+    MagicMock() for _ in range(n if isinstance(n, int) else len(n))
+]
 _st.stop = lambda: None
 sys.modules["streamlit"] = _st
 sys.modules["altair"] = MagicMock()
@@ -33,8 +35,24 @@ from dashboard.app import (  # noqa: E402
     get_mock_conversion_by_product,
 )
 
-_AGENT_COLS   = {"agent", "total_opportunities", "won_opportunities", "lost_opportunities", "win_rate_pct", "total_pipeline_value", "won_value"}
-_PRODUCT_COLS = {"product", "total_opportunities", "won_opportunities", "lost_opportunities", "win_rate_pct", "total_pipeline_value", "won_value"}
+_AGENT_COLS = {
+    "agent",
+    "total_opportunities",
+    "won_opportunities",
+    "lost_opportunities",
+    "win_rate_pct",
+    "total_pipeline_value",
+    "won_value",
+}
+_PRODUCT_COLS = {
+    "product",
+    "total_opportunities",
+    "won_opportunities",
+    "lost_opportunities",
+    "win_rate_pct",
+    "total_pipeline_value",
+    "won_value",
+}
 
 
 @pytest.fixture(scope="module")
@@ -48,6 +66,7 @@ def df_products() -> pd.DataFrame:
 
 
 # ── gld_conversion_by_agent ────────────────────────────────────────────────────
+
 
 class TestMockConversionByAgent:
     def test_returns_dataframe(self, df_agents):
@@ -73,10 +92,14 @@ class TestMockConversionByAgent:
         assert df_agents["win_rate_pct"].notna().all()
 
     def test_won_lte_total(self, df_agents):
-        assert (df_agents["won_opportunities"] <= df_agents["total_opportunities"]).all()
+        assert (
+            df_agents["won_opportunities"] <= df_agents["total_opportunities"]
+        ).all()
 
     def test_lost_lte_total(self, df_agents):
-        assert (df_agents["lost_opportunities"] <= df_agents["total_opportunities"]).all()
+        assert (
+            df_agents["lost_opportunities"] <= df_agents["total_opportunities"]
+        ).all()
 
     def test_sort_descending_by_win_rate(self, df_agents):
         sorted_df = df_agents.sort_values("win_rate_pct", ascending=False)
@@ -85,6 +108,7 @@ class TestMockConversionByAgent:
 
 
 # ── gld_conversion_by_product ──────────────────────────────────────────────────
+
 
 class TestMockConversionByProduct:
     def test_returns_dataframe(self, df_products):
@@ -110,7 +134,9 @@ class TestMockConversionByProduct:
         assert df_products["win_rate_pct"].notna().all()
 
     def test_won_lte_total(self, df_products):
-        assert (df_products["won_opportunities"] <= df_products["total_opportunities"]).all()
+        assert (
+            df_products["won_opportunities"] <= df_products["total_opportunities"]
+        ).all()
 
     def test_sort_descending_by_win_rate(self, df_products):
         sorted_df = df_products.sort_values("win_rate_pct", ascending=False)
@@ -119,6 +145,7 @@ class TestMockConversionByProduct:
 
 
 # ── _highlight_low_conversion ─────────────────────────────────────────────────
+
 
 class TestHighlightLowConversion:
     def test_red_below_20(self):

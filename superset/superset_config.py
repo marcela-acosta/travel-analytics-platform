@@ -1,6 +1,6 @@
 import os
 
-SECRET_KEY = "travel-analytics-platform-superset-2026"
+SECRET_KEY = "travel-analytics-platform-superset-2026"  # pragma: allowlist secret
 
 SQLALCHEMY_DATABASE_URI = (
     f"postgresql+psycopg2://"
@@ -28,7 +28,9 @@ FEATURE_FLAGS = {
     "EMBEDDED_SUPERSET": True,
 }
 
-GUEST_TOKEN_JWT_SECRET = "travel-analytics-guest-secret-2026"
+GUEST_TOKEN_JWT_SECRET = (
+    "travel-analytics-guest-secret-2026"  # pragma: allowlist secret
+)
 GUEST_ROLE_NAME = "Public"
 PUBLIC_ROLE_LIKE = "Gamma"
 

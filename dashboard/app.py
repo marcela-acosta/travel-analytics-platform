@@ -16,20 +16,32 @@ PRODUCTS = ["Flight", "Hotel", "Car Rental", "Package 2x", "Package 3x"]
 AGENTS = [f"Agent {i:02d}" for i in range(1, 21)]
 
 STAGE_COUNTS = {
-    "Prospecting": 120, "Qualified": 85, "Proposal": 52,
-    "Negotiation": 30, "Won": 18, "Lost": 22,
+    "Prospecting": 120,
+    "Qualified": 85,
+    "Proposal": 52,
+    "Negotiation": 30,
+    "Won": 18,
+    "Lost": 22,
 }
 STAGE_WIN_PROB = {
-    "Prospecting": 0.10, "Qualified": 0.25, "Proposal": 0.45,
-    "Negotiation": 0.70, "Won": 1.00, "Lost": 0.00,
+    "Prospecting": 0.10,
+    "Qualified": 0.25,
+    "Proposal": 0.45,
+    "Negotiation": 0.70,
+    "Won": 1.00,
+    "Lost": 0.00,
 }
 CLOSE_BUCKET_ORDER = ["Overdue", "This Week", "This Month", "Later"]
 PRODUCT_COLORS = {
-    "Flight": "#1a3d6e", "Hotel": "#1e5fa8", "Car Rental": "#4a9eed",
-    "Package 2x": "#f4a261", "Package 3x": "#e76f51",
+    "Flight": "#1a3d6e",
+    "Hotel": "#1e5fa8",
+    "Car Rental": "#4a9eed",
+    "Package 2x": "#f4a261",
+    "Package 3x": "#e76f51",
 }
-PRIMARY   = "#1e5fa8"
+PRIMARY = "#1e5fa8"
 STAGE_BLUES = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981", "#ef4444"]
+
 
 def get_mock_data() -> pd.DataFrame:
     rng = np.random.default_rng(42)
@@ -37,15 +49,19 @@ def get_mock_data() -> pd.DataFrame:
     for stage, count in STAGE_COUNTS.items():
         for i in range(count):
             days_since = int(rng.integers(0, 30))
-            rows.append({
-                "opportunity_id": f"OPP-{stage[:3].upper()}-{i:04d}",
-                "stage": stage, "region": rng.choice(REGIONS),
-                "product": rng.choice(PRODUCTS), "agent": rng.choice(AGENTS),
-                "value": round(float(rng.uniform(500, 15000)), 2),
-                "days_since_update": days_since,
-                "days_until_expected_close": int(rng.integers(-10, 60)),
-                "is_stale": days_since > 14,
-            })
+            rows.append(
+                {
+                    "opportunity_id": f"OPP-{stage[:3].upper()}-{i:04d}",
+                    "stage": stage,
+                    "region": rng.choice(REGIONS),
+                    "product": rng.choice(PRODUCTS),
+                    "agent": rng.choice(AGENTS),
+                    "value": round(float(rng.uniform(500, 15000)), 2),
+                    "days_since_update": days_since,
+                    "days_until_expected_close": int(rng.integers(-10, 60)),
+                    "is_stale": days_since > 14,
+                }
+            )
     df = pd.DataFrame(rows)
     df["stage"] = pd.Categorical(df["stage"], categories=STAGE_ORDER, ordered=True)
     return df.sort_values("stage").reset_index(drop=True)
@@ -56,8 +72,9 @@ def load_data() -> pd.DataFrame:
     if USE_MOCK:
         return get_mock_data()
     from google.cloud import bigquery
+
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    dataset = os.environ.get("GCP_DATASET", "layer_gold")
     client = bigquery.Client(project=project_id)
     rows = client.query(f"""
         SELECT opportunity_id, stage, region, product, agent, value,
@@ -71,41 +88,93 @@ def load_data() -> pd.DataFrame:
 
 def get_mock_conversion_by_agent() -> pd.DataFrame:
     raw = get_mock_data()
-    won     = raw[raw["stage"] == "Won"].groupby("agent").size().reset_index(name="won_opportunities")
-    lost    = raw[raw["stage"] == "Lost"].groupby("agent").size().reset_index(name="lost_opportunities")
-    won_val = raw[raw["stage"] == "Won"].groupby("agent")["value"].sum().reset_index(name="won_value")
+    won = (
+        raw[raw["stage"] == "Won"]
+        .groupby("agent")
+        .size()
+        .reset_index(name="won_opportunities")
+    )
+    lost = (
+        raw[raw["stage"] == "Lost"]
+        .groupby("agent")
+        .size()
+        .reset_index(name="lost_opportunities")
+    )
+    won_val = (
+        raw[raw["stage"] == "Won"]
+        .groupby("agent")["value"]
+        .sum()
+        .reset_index(name="won_value")
+    )
     agg = (
         raw.groupby("agent")
-        .agg(total_opportunities=("value", "count"), total_pipeline_value=("value", "sum"))
+        .agg(
+            total_opportunities=("value", "count"),
+            total_pipeline_value=("value", "sum"),
+        )
         .reset_index()
     )
-    agg = (agg.merge(won, on="agent", how="left")
-               .merge(lost, on="agent", how="left")
-               .merge(won_val, on="agent", how="left"))
-    agg = agg.fillna({"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0})
-    agg[["won_opportunities", "lost_opportunities"]] = agg[["won_opportunities", "lost_opportunities"]].astype(int)
+    agg = (
+        agg.merge(won, on="agent", how="left")
+        .merge(lost, on="agent", how="left")
+        .merge(won_val, on="agent", how="left")
+    )
+    agg = agg.fillna(
+        {"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0}
+    )
+    agg[["won_opportunities", "lost_opportunities"]] = agg[
+        ["won_opportunities", "lost_opportunities"]
+    ].astype(int)
     closed = agg["won_opportunities"] + agg["lost_opportunities"]
-    agg["win_rate_pct"] = (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).fillna(0.0).round(2)
+    agg["win_rate_pct"] = (
+        (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).fillna(0.0).round(2)
+    )
     return agg
 
 
 def get_mock_conversion_by_product() -> pd.DataFrame:
     raw = get_mock_data()
-    won     = raw[raw["stage"] == "Won"].groupby("product").size().reset_index(name="won_opportunities")
-    lost    = raw[raw["stage"] == "Lost"].groupby("product").size().reset_index(name="lost_opportunities")
-    won_val = raw[raw["stage"] == "Won"].groupby("product")["value"].sum().reset_index(name="won_value")
+    won = (
+        raw[raw["stage"] == "Won"]
+        .groupby("product")
+        .size()
+        .reset_index(name="won_opportunities")
+    )
+    lost = (
+        raw[raw["stage"] == "Lost"]
+        .groupby("product")
+        .size()
+        .reset_index(name="lost_opportunities")
+    )
+    won_val = (
+        raw[raw["stage"] == "Won"]
+        .groupby("product")["value"]
+        .sum()
+        .reset_index(name="won_value")
+    )
     agg = (
         raw.groupby("product")
-        .agg(total_opportunities=("value", "count"), total_pipeline_value=("value", "sum"))
+        .agg(
+            total_opportunities=("value", "count"),
+            total_pipeline_value=("value", "sum"),
+        )
         .reset_index()
     )
-    agg = (agg.merge(won, on="product", how="left")
-               .merge(lost, on="product", how="left")
-               .merge(won_val, on="product", how="left"))
-    agg = agg.fillna({"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0})
-    agg[["won_opportunities", "lost_opportunities"]] = agg[["won_opportunities", "lost_opportunities"]].astype(int)
+    agg = (
+        agg.merge(won, on="product", how="left")
+        .merge(lost, on="product", how="left")
+        .merge(won_val, on="product", how="left")
+    )
+    agg = agg.fillna(
+        {"won_opportunities": 0, "lost_opportunities": 0, "won_value": 0.0}
+    )
+    agg[["won_opportunities", "lost_opportunities"]] = agg[
+        ["won_opportunities", "lost_opportunities"]
+    ].astype(int)
     closed = agg["won_opportunities"] + agg["lost_opportunities"]
-    agg["win_rate_pct"] = (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).fillna(0.0).round(2)
+    agg["win_rate_pct"] = (
+        (agg["won_opportunities"] / closed.replace(0, pd.NA) * 100).fillna(0.0).round(2)
+    )
     return agg
 
 
@@ -114,8 +183,9 @@ def load_conversion_by_agent() -> pd.DataFrame:
     if USE_MOCK:
         return get_mock_conversion_by_agent()
     from google.cloud import bigquery
+
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    dataset = os.environ.get("GCP_DATASET", "layer_gold")
     client = bigquery.Client(project=project_id)
     rows = client.query(f"""
         SELECT agent, total_opportunities, won_opportunities, lost_opportunities,
@@ -130,8 +200,9 @@ def load_conversion_by_product() -> pd.DataFrame:
     if USE_MOCK:
         return get_mock_conversion_by_product()
     from google.cloud import bigquery
+
     project_id = os.environ.get("GCP_PROJECT", "pipeline-health-mon-2026")
-    dataset    = os.environ.get("GCP_DATASET", "layer_gold")
+    dataset = os.environ.get("GCP_DATASET", "layer_gold")
     client = bigquery.Client(project=project_id)
     rows = client.query(f"""
         SELECT product, total_opportunities, won_opportunities, lost_opportunities,
@@ -142,9 +213,12 @@ def load_conversion_by_product() -> pd.DataFrame:
 
 
 def close_bucket(days: int) -> str:
-    if days < 0:     return "Overdue"
-    if days <= 7:    return "This Week"
-    if days <= 30:   return "This Month"
+    if days < 0:
+        return "Overdue"
+    if days <= 7:
+        return "This Week"
+    if days <= 30:
+        return "This Month"
     return "Later"
 
 
@@ -156,15 +230,15 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     from io import BytesIO as _BIO
 
     # Palette
-    NAVY   = (15,  39,  68)
-    BLUE   = (30,  95,  168)
-    LBLUE  = (224, 235, 248)
-    GRAY   = (74,  107, 138)
-    LGRAY  = (245, 248, 252)
-    WHITE  = (255, 255, 255)
-    GREEN  = (22,  163, 74)
-    ORANGE = (234, 88,  12)
-    RED    = (220, 38,  38)
+    NAVY = (15, 39, 68)
+    BLUE = (30, 95, 168)
+    LBLUE = (224, 235, 248)
+    GRAY = (74, 107, 138)
+    LGRAY = (245, 248, 252)
+    WHITE = (255, 255, 255)
+    GREEN = (22, 163, 74)
+    ORANGE = (234, 88, 12)
+    RED = (220, 38, 38)
 
     _now = _dtnow.now().strftime("%Y-%m-%d %H:%M")
 
@@ -202,13 +276,15 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    won      = len(df_snap[df_snap["stage"] == "Won"])
-    lost     = len(df_snap[df_snap["stage"] == "Lost"])
-    cl       = won + lost
-    wr       = (won / cl * 100) if cl > 0 else 0
-    stale    = int(df_snap["is_stale"].sum())
-    weighted = (df_snap["value"].astype(float) *
-                df_snap["stage"].astype(str).map(STAGE_WIN_PROB).fillna(0)).sum()
+    won = len(df_snap[df_snap["stage"] == "Won"])
+    lost = len(df_snap[df_snap["stage"] == "Lost"])
+    cl = won + lost
+    wr = (won / cl * 100) if cl > 0 else 0
+    stale = int(df_snap["is_stale"].sum())
+    weighted = (
+        df_snap["value"].astype(float)
+        * df_snap["stage"].astype(str).map(STAGE_WIN_PROB).fillna(0)
+    ).sum()
 
     # ── Section header ────────────────────────────────────────────────────
     def section(title):
@@ -258,7 +334,9 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
                 if color_col is not None and ci == color_col:
                     try:
                         n = float(str(val).replace("%", ""))
-                        pdf.set_text_color(*(GREEN if n >= hi[0] else ORANGE if n >= hi[1] else RED))
+                        pdf.set_text_color(
+                            *(GREEN if n >= hi[0] else ORANGE if n >= hi[1] else RED)
+                        )
                     except Exception:
                         pdf.set_text_color(30, 30, 30)
                 else:
@@ -272,32 +350,46 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
 
     # ── Chart helpers ─────────────────────────────────────────────────────
     _PLOTLY_BASE = dict(
-        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        showlegend=False,
         font=dict(family="Arial"),
     )
 
     def _chart_funnel() -> _BIO:
         order = ["Prospecting", "Qualified", "Proposal", "Negotiation", "Won"]
         colors = ["#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#10b981"]
-        data = (stage_snap[stage_snap["stage"].isin(order)]
-                .set_index("stage").reindex(order[::-1]))
+        data = (
+            stage_snap[stage_snap["stage"].isin(order)]
+            .set_index("stage")
+            .reindex(order[::-1])
+        )
         vals = data["total_opportunities"].tolist()
-        fig = go.Figure(go.Bar(
-            y=list(data.index), x=vals, orientation="h",
-            marker_color=colors[::-1],
-            text=[f"  {int(v):,}" for v in vals],
-            textposition="inside",
-            insidetextanchor="end",
-            textfont=dict(color="white", size=12, family="Arial Black"),
-            hovertemplate="%{y}: %{x:,}<extra></extra>",
-        ))
+        fig = go.Figure(
+            go.Bar(
+                y=list(data.index),
+                x=vals,
+                orientation="h",
+                marker_color=colors[::-1],
+                text=[f"  {int(v):,}" for v in vals],
+                textposition="inside",
+                insidetextanchor="end",
+                textfont=dict(color="white", size=12, family="Arial Black"),
+                hovertemplate="%{y}: %{x:,}<extra></extra>",
+            )
+        )
         fig.update_layout(
             **_PLOTLY_BASE,
             margin=dict(l=10, r=20, t=10, b=30),
-            width=1100, height=260,
-            xaxis=dict(title="Opportunities", gridcolor="#e0ebf8", showline=False,
-                       tickfont=dict(size=10, color="#4a6b8a"),
-                       title_font=dict(size=10, color="#4a6b8a")),
+            width=1100,
+            height=260,
+            xaxis=dict(
+                title="Opportunities",
+                gridcolor="#e0ebf8",
+                showline=False,
+                tickfont=dict(size=10, color="#4a6b8a"),
+                title_font=dict(size=10, color="#4a6b8a"),
+            ),
             yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
         )
         buf = _BIO(fig.to_image(format="png", scale=1.5))
@@ -307,31 +399,53 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     def _chart_closing() -> _BIO:
         df_c = df_snap.copy()
         df_c["close_bucket"] = df_c["days_until_expected_close"].apply(close_bucket)
-        bucket_counts = (df_c[df_c["stage"].isin(
-            ["Prospecting", "Qualified", "Proposal", "Negotiation"])]
-            .groupby("close_bucket")["value"].count()
-            .reindex(CLOSE_BUCKET_ORDER, fill_value=0))
-        bcolors = {"Overdue": "#c0392b", "This Week": "#e67e22",
-                   "This Month": "#1e5fa8", "Later": "#7ab8f5"}
+        bucket_counts = (
+            df_c[
+                df_c["stage"].isin(
+                    ["Prospecting", "Qualified", "Proposal", "Negotiation"]
+                )
+            ]
+            .groupby("close_bucket")["value"]
+            .count()
+            .reindex(CLOSE_BUCKET_ORDER, fill_value=0)
+        )
+        bcolors = {
+            "Overdue": "#c0392b",
+            "This Week": "#e67e22",
+            "This Month": "#1e5fa8",
+            "Later": "#7ab8f5",
+        }
         vals = bucket_counts.values.tolist()
-        fig = go.Figure(go.Bar(
-            x=list(bucket_counts.index), y=vals,
-            marker_color=[bcolors[b] for b in bucket_counts.index],
-            text=[str(int(v)) for v in vals],
-            textposition="outside",
-            textfont=dict(color="#0f2744", size=13, family="Arial Black"),
-            hovertemplate="%{x}: %{y:,}<extra></extra>",
-        ))
+        fig = go.Figure(
+            go.Bar(
+                x=list(bucket_counts.index),
+                y=vals,
+                marker_color=[bcolors[b] for b in bucket_counts.index],
+                text=[str(int(v)) for v in vals],
+                textposition="outside",
+                textfont=dict(color="#0f2744", size=13, family="Arial Black"),
+                hovertemplate="%{x}: %{y:,}<extra></extra>",
+            )
+        )
         fig.update_layout(
             **_PLOTLY_BASE,
-            title=dict(text="Closing Timeline",
-                       font=dict(size=12, color="#0f2744", family="Arial Black"), x=0.5),
+            title=dict(
+                text="Closing Timeline",
+                font=dict(size=12, color="#0f2744", family="Arial Black"),
+                x=0.5,
+            ),
             margin=dict(l=10, r=10, t=44, b=10),
-            width=570, height=300,
-            xaxis=dict(tickfont=dict(size=12, color="#4a6b8a"), showgrid=False, showline=False),
-            yaxis=dict(gridcolor="#e0ebf8", showline=False,
-                       tickfont=dict(size=9, color="#4a6b8a"),
-                       range=[0, max(vals) * 1.2 + 1]),
+            width=570,
+            height=300,
+            xaxis=dict(
+                tickfont=dict(size=12, color="#4a6b8a"), showgrid=False, showline=False
+            ),
+            yaxis=dict(
+                gridcolor="#e0ebf8",
+                showline=False,
+                tickfont=dict(size=9, color="#4a6b8a"),
+                range=[0, max(vals) * 1.2 + 1],
+            ),
         )
         buf = _BIO(fig.to_image(format="png", scale=1.5))
         buf.seek(0)
@@ -340,35 +454,55 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     def _chart_agent_winrate() -> _BIO:
         top = agent_snap.sort_values("win_rate_pct", ascending=False).head(10)
         vals = top["win_rate_pct"].values
-        bar_colors = ["#16a34a" if v >= 40 else "#ea580c" if v >= 20 else "#dc2626"
-                      for v in vals]
+        bar_colors = [
+            "#16a34a" if v >= 40 else "#ea580c" if v >= 20 else "#dc2626" for v in vals
+        ]
         max_val = float(max(vals)) if len(vals) > 0 else 100
-        fig = go.Figure(go.Bar(
-            y=top["agent"].values[::-1].tolist(),
-            x=vals[::-1].tolist(),
-            orientation="h",
-            marker_color=bar_colors[::-1],
-            text=[f"{v:.1f}%" for v in vals[::-1]],
-            textposition="outside",
-            textfont=dict(color="#0f2744", size=11, family="Arial Black"),
-            hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
-        ))
-        fig.add_vline(x=40, line_dash="dash", line_color="#16a34a",
-                      line_width=1.5, opacity=0.65,
-                      annotation_text="40%", annotation_position="top right",
-                      annotation_font=dict(size=9, color="#16a34a"))
-        fig.add_vline(x=20, line_dash="dash", line_color="#ea580c",
-                      line_width=1.5, opacity=0.65,
-                      annotation_text="20%", annotation_position="top right",
-                      annotation_font=dict(size=9, color="#ea580c"))
+        fig = go.Figure(
+            go.Bar(
+                y=top["agent"].values[::-1].tolist(),
+                x=vals[::-1].tolist(),
+                orientation="h",
+                marker_color=bar_colors[::-1],
+                text=[f"{v:.1f}%" for v in vals[::-1]],
+                textposition="outside",
+                textfont=dict(color="#0f2744", size=11, family="Arial Black"),
+                hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+            )
+        )
+        fig.add_vline(
+            x=40,
+            line_dash="dash",
+            line_color="#16a34a",
+            line_width=1.5,
+            opacity=0.65,
+            annotation_text="40%",
+            annotation_position="top right",
+            annotation_font=dict(size=9, color="#16a34a"),
+        )
+        fig.add_vline(
+            x=20,
+            line_dash="dash",
+            line_color="#ea580c",
+            line_width=1.5,
+            opacity=0.65,
+            annotation_text="20%",
+            annotation_position="top right",
+            annotation_font=dict(size=9, color="#ea580c"),
+        )
         fig.update_layout(
             **_PLOTLY_BASE,
             margin=dict(l=10, r=70, t=10, b=30),
-            width=1100, height=320,
-            xaxis=dict(title="Win Rate (%)", range=[0, max_val * 1.3 + 5],
-                       gridcolor="#e0ebf8", showline=False,
-                       tickfont=dict(size=9, color="#4a6b8a"),
-                       title_font=dict(size=10, color="#4a6b8a")),
+            width=1100,
+            height=320,
+            xaxis=dict(
+                title="Win Rate (%)",
+                range=[0, max_val * 1.3 + 5],
+                gridcolor="#e0ebf8",
+                showline=False,
+                tickfont=dict(size=9, color="#4a6b8a"),
+                title_font=dict(size=10, color="#4a6b8a"),
+            ),
             yaxis=dict(tickfont=dict(size=12, color="#0f2744"), showgrid=False),
         )
         buf = _BIO(fig.to_image(format="png", scale=1.5))
@@ -378,14 +512,12 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
     # ── KPI cards ─────────────────────────────────────────────────────────
     section("Key Metrics")
     kpis = [
-        ("Total Opportunities", f"{len(df_snap):,}",              BLUE),
-        ("Pipeline Value",      f"${df_snap['value'].sum():,.0f}", NAVY),
-        ("Weighted Forecast",   f"${weighted:,.0f}",               BLUE),
-        ("Win Rate",            f"{wr:.1f}%",
-         GREEN if wr >= 40 else ORANGE if wr >= 20 else RED),
-        ("Won Deals",           f"{won:,}",                        GREEN),
-        ("Stale Opportunities", f"{stale:,}",
-         RED if stale > 20 else ORANGE),
+        ("Total Opportunities", f"{len(df_snap):,}", BLUE),
+        ("Pipeline Value", f"${df_snap['value'].sum():,.0f}", NAVY),
+        ("Weighted Forecast", f"${weighted:,.0f}", BLUE),
+        ("Win Rate", f"{wr:.1f}%", GREEN if wr >= 40 else ORANGE if wr >= 20 else RED),
+        ("Won Deals", f"{won:,}", GREEN),
+        ("Stale Opportunities", f"{stale:,}", RED if stale > 20 else ORANGE),
     ]
     y0 = pdf.get_y()
     for i, (lbl, val, color) in enumerate(kpis):
@@ -404,9 +536,13 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
         ["Stage", "Opportunities", "Pipeline Value", "Weighted Forecast", "Stale"],
         [40, 32, 44, 46, 24],
         [
-            [r["stage"], f"{r['total_opportunities']:,}",
-             f"${r['total_value']:,.0f}", f"${r['weighted_value']:,.0f}",
-             int(r["stale_opportunities"])]
+            [
+                r["stage"],
+                f"{r['total_opportunities']:,}",
+                f"${r['total_value']:,.0f}",
+                f"${r['weighted_value']:,.0f}",
+                int(r["stale_opportunities"]),
+            ]
             for _, r in stage_snap.iterrows()
         ],
     )
@@ -423,9 +559,16 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
         ["Agent", "Opportunities", "Won", "Win Rate", "Pipeline Value"],
         [46, 34, 22, 30, 54],
         [
-            [r["agent"], r["total_opportunities"], r["won_opportunities"],
-             f"{r['win_rate_pct']:.1f}%", f"${r['total_pipeline_value']:,.0f}"]
-            for _, r in agent_snap.sort_values("win_rate_pct", ascending=False).head(10).iterrows()
+            [
+                r["agent"],
+                r["total_opportunities"],
+                r["won_opportunities"],
+                f"{r['win_rate_pct']:.1f}%",
+                f"${r['total_pipeline_value']:,.0f}",
+            ]
+            for _, r in agent_snap.sort_values("win_rate_pct", ascending=False)
+            .head(10)
+            .iterrows()
         ],
         color_col=3,
     )
@@ -441,9 +584,16 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
         ["Product", "Opportunities", "Won", "Win Rate", "Pipeline Value"],
         [46, 34, 22, 30, 54],
         [
-            [r["product"], r["total_opportunities"], r["won_opportunities"],
-             f"{r['win_rate_pct']:.1f}%", f"${r['total_pipeline_value']:,.0f}"]
-            for _, r in product_snap.sort_values("win_rate_pct", ascending=False).iterrows()
+            [
+                r["product"],
+                r["total_opportunities"],
+                r["won_opportunities"],
+                f"{r['win_rate_pct']:.1f}%",
+                f"${r['total_pipeline_value']:,.0f}",
+            ]
+            for _, r in product_snap.sort_values(
+                "win_rate_pct", ascending=False
+            ).iterrows()
         ],
         color_col=3,
     )
@@ -452,10 +602,15 @@ def _build_pdf(df_snap, stage_snap, agent_snap, product_snap) -> bytes:
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Travel Analytics Platform", page_icon="📊",
-                   layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="Travel Analytics Platform",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 [data-testid="stMetric"] { background:#f0f5fb; border-left:4px solid #1e5fa8; padding:16px 20px; border-radius:8px; }
 [data-testid="stMetricLabel"] { color:#4a6b8a; font-size:0.85rem; }
@@ -465,58 +620,77 @@ st.markdown("""
 h2 { color:#0f2744 !important; border-bottom:2px solid #e0ebf8; padding-bottom:6px; }
 hr { border-color:#e0ebf8; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 raw = load_data()
 df = raw.copy()
 
 st.markdown("# Travel Analytics Platform")
-st.caption(f"🟢 LIVE · updated: {datetime.now().strftime('%H:%M:%S')} UTC · auto-refreshes every 60 s")
+st.caption(
+    f"🟢 LIVE · updated: {datetime.now().strftime('%H:%M:%S')} UTC · auto-refreshes every 60 s"
+)
 
 if df.empty:
     st.error("No data matches the selected filters.")
     st.stop()
 
 # Derived columns
-df["win_prob"]      = df["stage"].astype(str).map(STAGE_WIN_PROB).fillna(0).astype(float)
-df["weighted_value"]= df["value"].astype(float) * df["win_prob"]
-df["close_bucket"]  = df["days_until_expected_close"].apply(close_bucket)
-df["close_bucket"]  = pd.Categorical(df["close_bucket"], categories=CLOSE_BUCKET_ORDER, ordered=True)
+df["win_prob"] = df["stage"].astype(str).map(STAGE_WIN_PROB).fillna(0).astype(float)
+df["weighted_value"] = df["value"].astype(float) * df["win_prob"]
+df["close_bucket"] = df["days_until_expected_close"].apply(close_bucket)
+df["close_bucket"] = pd.Categorical(
+    df["close_bucket"], categories=CLOSE_BUCKET_ORDER, ordered=True
+)
 
 stage_agg = (
     df.groupby("stage", observed=True)
-    .agg(total_opportunities=("value","count"), total_value=("value","sum"),
-         weighted_value=("weighted_value","sum"), stale_opportunities=("is_stale","sum"),
-         avg_days_since_update=("days_since_update","mean"))
+    .agg(
+        total_opportunities=("value", "count"),
+        total_value=("value", "sum"),
+        weighted_value=("weighted_value", "sum"),
+        stale_opportunities=("is_stale", "sum"),
+        avg_days_since_update=("days_since_update", "mean"),
+    )
     .reset_index()
 )
 stage_agg["stage"] = stage_agg["stage"].astype(str)
 
 # ── KPIs ──────────────────────────────────────────────────────────────────────
-won_opps    = len(df[df["stage"] == "Won"])
-lost_opps   = len(df[df["stage"] == "Lost"])
-closed      = won_opps + lost_opps
-win_rate    = (won_opps / closed * 100) if closed > 0 else 0
-avg_deal    = df[df["stage"] == "Won"]["value"].mean() if won_opps > 0 else 0
+won_opps = len(df[df["stage"] == "Won"])
+lost_opps = len(df[df["stage"] == "Lost"])
+closed = won_opps + lost_opps
+win_rate = (won_opps / closed * 100) if closed > 0 else 0
+avg_deal = df[df["stage"] == "Won"]["value"].mean() if won_opps > 0 else 0
 stale_count = int(df["is_stale"].sum())
-stale_pct   = round(stale_count / len(df) * 100, 1) if len(df) > 0 else 0
+stale_pct = round(stale_count / len(df) * 100, 1) if len(df) > 0 else 0
 weighted_total = df["weighted_value"].sum()
 
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Total Opportunities", f"{len(df):,}")
-k2.metric("Pipeline Value",      f"${df['value'].sum():,.0f}")
-k3.metric("Weighted Forecast",   f"${weighted_total:,.0f}")
-k4.metric("Win Rate",            f"{win_rate:.1f}%")
-k5.metric("Avg Won Deal",        f"${avg_deal:,.0f}")
-k6.metric("Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse")
+k2.metric("Pipeline Value", f"${df['value'].sum():,.0f}")
+k3.metric("Weighted Forecast", f"${weighted_total:,.0f}")
+k4.metric("Win Rate", f"{win_rate:.1f}%")
+k5.metric("Avg Won Deal", f"${avg_deal:,.0f}")
+k6.metric(
+    "Stale", f"{stale_count:,}", delta=f"{stale_pct}% of total", delta_color="inverse"
+)
 
-_pdf_bytes = _build_pdf(df, stage_agg, load_conversion_by_agent(), load_conversion_by_product())
+_pdf_bytes = _build_pdf(
+    df, stage_agg, load_conversion_by_agent(), load_conversion_by_product()
+)
 
 _rb1, _rb2, _rb3 = st.columns([1.3, 1.3, 9.4])
 with _rb1:
-    st.download_button("📄 Download Report", data=_pdf_bytes,
+    st.download_button(
+        "📄 Download Report",
+        data=_pdf_bytes,
         file_name=f"pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-        mime="application/pdf", use_container_width=True, key="dl_top")
+        mime="application/pdf",
+        use_container_width=True,
+        key="dl_top",
+    )
 with _rb2:
     if st.button("📧 Send via Email", use_container_width=True, key="email_top"):
         st.session_state["_pdf_for_email"] = _pdf_bytes
@@ -530,18 +704,28 @@ st.markdown(
     "View pipeline funnel, conversion rates, regional breakdowns, agent leaderboard, "
     "and more — with live filters and drill-down capabilities."
 )
-st.link_button("🔗 Open in Superset", "http://localhost:8088/superset/dashboard/pipeline-health/", use_container_width=False)
+st.link_button(
+    "🔗 Open in Superset",
+    "http://localhost:8088/superset/dashboard/pipeline-health/",
+    use_container_width=False,
+)
 
 st.divider()
 
 # ── AI Chat + Email dialog ──────────────────────────────────────────────────
-import sys as _sys, os as _os
-_sys.path.insert(0, _os.path.dirname(__file__))
-from agent import chat as _agent_chat
-import streamlit.components.v1 as _components
+import sys as _sys  # noqa: E402
+import os as _os  # noqa: E402
 
-for _k, _v in [("chat_history", []), ("chat_open", False),
-               ("_open_email_dlg", False), ("_pdf_for_email", None)]:
+_sys.path.insert(0, _os.path.dirname(__file__))
+from agent import chat as _agent_chat  # noqa: E402
+import streamlit.components.v1 as _components  # noqa: E402
+
+for _k, _v in [
+    ("chat_history", []),
+    ("chat_open", False),
+    ("_open_email_dlg", False),
+    ("_pdf_for_email", None),
+]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
@@ -556,10 +740,15 @@ _SUGGESTIONS = [
 def _email_dialog():
     _pdf = st.session_state.get("_pdf_for_email", b"")
     st.markdown("Enter the recipient's address and we'll attach the PDF report.")
-    _to   = st.text_input("Recipient email", placeholder="colleague@company.com")
-    _subj = st.text_input("Subject", value=f"Pipeline Report - {datetime.now().strftime('%Y-%m-%d')}")
-    _body = st.text_area("Message (optional)",
-                         placeholder="Hi, please find the pipeline report attached.", height=80)
+    _to = st.text_input("Recipient email", placeholder="colleague@company.com")
+    _subj = st.text_input(
+        "Subject", value=f"Pipeline Report - {datetime.now().strftime('%Y-%m-%d')}"
+    )
+    _body = st.text_area(
+        "Message (optional)",
+        placeholder="Hi, please find the pipeline report attached.",
+        height=80,
+    )
     _c1, _c2 = st.columns(2)
     if _c1.button("Send", type="primary", use_container_width=True):
         if not _to:
@@ -569,25 +758,39 @@ def _email_dialog():
             _su = os.environ.get("SMTP_USER", "")
             _sp = os.environ.get("SMTP_PASSWORD", "")
             if not (_sh and _su and _sp):
-                st.warning("SMTP not configured. Add **SMTP_HOST**, **SMTP_USER** and **SMTP_PASSWORD** to your `.env` file to enable sending.")
-                st.download_button("📄 Download PDF instead", data=_pdf,
+                st.warning(
+                    "SMTP not configured. Add **SMTP_HOST**, **SMTP_USER** and **SMTP_PASSWORD** to your `.env` file to enable sending."
+                )
+                st.download_button(
+                    "📄 Download PDF instead",
+                    data=_pdf,
                     file_name=f"pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf", use_container_width=True)
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
             else:
                 import smtplib
                 from email.mime.multipart import MIMEMultipart
                 from email.mime.text import MIMEText
                 from email.mime.base import MIMEBase
                 from email import encoders
+
                 try:
                     _mail = MIMEMultipart()
                     _mail["From"], _mail["To"], _mail["Subject"] = _su, _to, _subj
-                    _mail.attach(MIMEText(_body or "Please find the pipeline report attached.", "plain"))
+                    _mail.attach(
+                        MIMEText(
+                            _body or "Please find the pipeline report attached.",
+                            "plain",
+                        )
+                    )
                     _part = MIMEBase("application", "octet-stream")
                     _part.set_payload(_pdf)
                     encoders.encode_base64(_part)
-                    _part.add_header("Content-Disposition",
-                        f"attachment; filename=pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf")
+                    _part.add_header(
+                        "Content-Disposition",
+                        f"attachment; filename=pipeline_report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    )
                     _mail.attach(_part)
                     with smtplib.SMTP_SSL(_sh, 465) as _srv:
                         _srv.login(_su, _sp)
@@ -656,7 +859,8 @@ if st.session_state.chat_open:
     _chat_dialog()
 
 # ── JS: float FAB + reposition chat dialog to bottom-right ───────────────────
-_components.html("""
+_components.html(
+    """
 <script>
 (function() {
     var doc = window.parent.document;
@@ -769,5 +973,6 @@ _components.html("""
     }, 200);
 })();
 </script>
-""", height=0)
-
+""",
+    height=0,
+)

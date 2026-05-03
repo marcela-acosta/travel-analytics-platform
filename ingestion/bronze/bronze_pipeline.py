@@ -16,10 +16,7 @@ def parse_message(msg):
 
 
 def run(subscription, table, schema):
-    options = PipelineOptions([
-        "--runner=DirectRunner",
-        "--streaming"
-    ])
+    options = PipelineOptions(["--runner=DirectRunner", "--streaming"])
 
     with beam.Pipeline(options=options) as p:
         (
@@ -27,11 +24,12 @@ def run(subscription, table, schema):
             | "ReadFromPubSub" >> beam.io.ReadFromPubSub(subscription=subscription)
             | "ParseJSON" >> beam.Map(parse_message)
             | "FilterValidRows" >> beam.Filter(lambda x: x is not None)
-            | "WriteToBigQuery" >> beam.io.WriteToBigQuery(
+            | "WriteToBigQuery"
+            >> beam.io.WriteToBigQuery(
                 table=table,
                 schema=schema,
                 write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
             )
         )
 
@@ -43,8 +41,4 @@ if __name__ == "__main__":
     parser.add_argument("--schema", required=True)
     args, pipeline_args = parser.parse_known_args()
 
-    run(
-        subscription=args.subscription,
-        table=args.table,
-        schema=args.schema
-    )
+    run(subscription=args.subscription, table=args.table, schema=args.schema)

@@ -32,7 +32,9 @@ def _dbt_context() -> str:
     for m in data.get("models", []):
         cols = ", ".join(c["name"] for c in m.get("columns", []))
         col_str = f" - columns: {cols}" if cols else ""
-        lines.append(f"- `{PROJECT_ID}.gold.{m['name']}`: {m.get('description', '')}{col_str}")
+        lines.append(
+            f"- `{PROJECT_ID}.gold.{m['name']}`: {m.get('description', '')}{col_str}"
+        )
     return "\n".join(lines)
 
 
@@ -88,16 +90,18 @@ _TOOL = {
 
 def _execute(sql: str, mock_df) -> str:
     if USE_MOCK and mock_df is not None:
-        clean = re.sub(r'`[^`]*\.(gld_\w+)`', r'\1', sql)
-        clean = re.sub(r'`', '', clean)
+        clean = re.sub(r"`[^`]*\.(gld_\w+)`", r"\1", sql)
+        clean = re.sub(r"`", "", clean)
         # Normalize booleans for SQLite
-        clean = re.sub(r'\bTRUE\b', '1', clean, flags=re.IGNORECASE)
-        clean = re.sub(r'\bFALSE\b', '0', clean, flags=re.IGNORECASE)
+        clean = re.sub(r"\bTRUE\b", "1", clean, flags=re.IGNORECASE)
+        clean = re.sub(r"\bFALSE\b", "0", clean, flags=re.IGNORECASE)
         conn = sqlite3.connect(":memory:")
         try:
             df = mock_df.copy()
             df["stage"] = df["stage"].astype(str)
-            df.to_sql("gld_dashboard_opportunities", conn, index=False, if_exists="replace")
+            df.to_sql(
+                "gld_dashboard_opportunities", conn, index=False, if_exists="replace"
+            )
             result = pd.read_sql(clean, conn)
             return result.to_json(orient="records", indent=2)
         except Exception as e:
@@ -106,6 +110,7 @@ def _execute(sql: str, mock_df) -> str:
             conn.close()
     try:
         from google.cloud import bigquery
+
         result = bigquery.Client(project=PROJECT_ID).query(sql).to_dataframe()
         return result.to_json(orient="records", indent=2)
     except Exception as e:
@@ -143,10 +148,12 @@ def chat(user_message: str, history: list, mock_df=None) -> str:
         for tc in msg.tool_calls:
             args = json.loads(tc.function.arguments)
             result = _execute(args["sql"], mock_df)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                }
+            )
 
     return msg.content or "No response generated."

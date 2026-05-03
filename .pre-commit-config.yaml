@@ -10,18 +10,13 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=500"]
 
-  # Python formatting
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  # Python formatting + linting (replaces black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.9
     hooks:
-      - id: black
-        language_version: python3
-
-  # Terraform formatting
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.99.3
-    hooks:
-      - id: terraform_fmt
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
 
   # Secret / credential detection
   - repo: https://github.com/Yelp/detect-secrets

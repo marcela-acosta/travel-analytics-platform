@@ -4,9 +4,9 @@ x-env: &env
   DB_HOST: db
   DB_NAME: superset
   DB_USER: superset
-  DB_PASS: superset
+  DB_PASS: superset  # pragma: allowlist secret
   REDIS_HOST: redis
-  SUPERSET_SECRET_KEY: "travel-analytics-platform-superset-2026"
+  SUPERSET_SECRET_KEY: "travel-analytics-platform-superset-2026"  # pragma: allowlist secret
   SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
 
 services:

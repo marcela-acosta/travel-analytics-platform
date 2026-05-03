@@ -2,6 +2,7 @@
 Run after Superset is up to register BigQuery + gold datasets automatically.
 Usage: python setup_bigquery.py
 """
+
 import os
 import time
 import requests
@@ -28,7 +29,7 @@ def wait_for_superset(retries=30, delay=5):
                 return
         except Exception:
             pass
-        print(f"Waiting... ({i+1}/{retries})")
+        print(f"Waiting... ({i + 1}/{retries})")
         time.sleep(delay)
     raise RuntimeError("Superset did not start in time.")
 
@@ -36,15 +37,22 @@ def wait_for_superset(retries=30, delay=5):
 def get_session_and_headers():
     session = requests.Session()
     # Step 1: login
-    login = session.post(f"{BASE}/api/v1/security/login", json={
-        "username": "admin", "password": _ADMIN_PASSWORD,
-        "provider": "db", "refresh": True,
-    })
+    login = session.post(
+        f"{BASE}/api/v1/security/login",
+        json={
+            "username": "admin",
+            "password": _ADMIN_PASSWORD,
+            "provider": "db",
+            "refresh": True,
+        },
+    )
     login.raise_for_status()
     token = login.json()["access_token"]
     # Step 2: get CSRF token
-    csrf_resp = session.get(f"{BASE}/api/v1/security/csrf_token/",
-                            headers={"Authorization": f"Bearer {token}"})
+    csrf_resp = session.get(
+        f"{BASE}/api/v1/security/csrf_token/",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     csrf_resp.raise_for_status()
     csrf_token = csrf_resp.json()["result"]
     headers = {
@@ -97,4 +105,6 @@ if __name__ == "__main__":
     sess, hdrs = get_session_and_headers()
     db_id = create_database(sess, hdrs)
     create_datasets(sess, hdrs, db_id)
-    print(f"\nDone. Open http://localhost:8088  →  admin / (see SUPERSET_ADMIN_PASSWORD in .env)")
+    print(
+        "\nDone. Open http://localhost:8088  →  admin / (see SUPERSET_ADMIN_PASSWORD in .env)"
+    )

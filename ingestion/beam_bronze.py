@@ -14,12 +14,12 @@ ssl._create_default_https_context = lambda *args, **kwargs: ssl.create_default_c
     cafile=CA_FILE
 )
 
-import json
-import logging
-from datetime import datetime, timezone
+import json  # noqa: E402
+import logging  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 
-import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
+import apache_beam as beam  # noqa: E402
+from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions  # noqa: E402
 
 PROJECT_ID = "pipeline-health-mon-2026"
 SUBSCRIPTION = f"projects/{PROJECT_ID}/subscriptions/crm-events-sub"

@@ -20,7 +20,7 @@ def generate_event():
     return {
         "opportunity_id": str(uuid.uuid4()),
         "stage": random.choice(STAGES),
-        "agent_id": f"agent_{random.randint(1,20)}",
+        "agent_id": f"agent_{random.randint(1, 20)}",
         "product": random.choice(PRODUCTS),
         "value": round(random.uniform(500, 15000), 2),
         "region": random.choice(REGIONS),
