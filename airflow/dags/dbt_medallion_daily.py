@@ -38,6 +38,7 @@ from cosmos.profiles import GoogleCloudServiceAccountFileProfileMapping
 GCP_CONN_ID = "google_cloud_default"
 DBT_DIR = "/opt/airflow/dbt/dbt_health_monitor"
 DBT_BIN = "/home/airflow/.local/bin/dbt"
+DBT_MANIFEST = f"{DBT_DIR}/target/manifest.json"
 
 profile_config = ProfileConfig(
     profile_name="dbt_health_monitor",
@@ -72,12 +73,15 @@ with DAG(
     with TaskGroup(group_id="models") as models:
         silver = DbtTaskGroup(
             group_id="silver",
-            project_config=ProjectConfig(dbt_project_path=DBT_DIR),
+            project_config=ProjectConfig(
+                dbt_project_path=DBT_DIR,
+                manifest_path=DBT_MANIFEST,
+            ),
             profile_config=profile_config,
             execution_config=ExecutionConfig(dbt_executable_path=DBT_BIN),
             operator_args={"install_deps": True},
             render_config=RenderConfig(
-                load_method=LoadMode.DBT_LS,
+                load_method=LoadMode.DBT_MANIFEST,
                 select=["path:models/silver"],
                 exclude=["package:elementary"],
                 test_behavior=TestBehavior.AFTER_ALL,
@@ -86,12 +90,15 @@ with DAG(
 
         gold = DbtTaskGroup(
             group_id="gold",
-            project_config=ProjectConfig(dbt_project_path=DBT_DIR),
+            project_config=ProjectConfig(
+                dbt_project_path=DBT_DIR,
+                manifest_path=DBT_MANIFEST,
+            ),
             profile_config=profile_config,
             execution_config=ExecutionConfig(dbt_executable_path=DBT_BIN),
             operator_args={"install_deps": True},
             render_config=RenderConfig(
-                load_method=LoadMode.DBT_LS,
+                load_method=LoadMode.DBT_MANIFEST,
                 select=["path:models/gold"],
                 exclude=["package:elementary"],
                 test_behavior=TestBehavior.AFTER_ALL,

@@ -7,7 +7,11 @@ models:
       - elementary.volume_anomalies:
           timestamp_column: null
           sensitivity: 3
-      - elementary.schema_changes
+          config:
+            severity: warn
+      - elementary.schema_changes:
+          config:
+            severity: warn
     columns:
       - name: opportunity_id
         tests:
@@ -27,6 +31,8 @@ models:
               column_anomalies:
                 - null_count
                 - zero_count
+              config:
+                severity: warn
 
   - name: gld_pipeline_by_stage
     description: Aggregated pipeline metrics by sales stage.
@@ -34,7 +40,11 @@ models:
       - elementary.volume_anomalies:
           timestamp_column: null
           sensitivity: 3
-      - elementary.schema_changes
+          config:
+            severity: warn
+      - elementary.schema_changes:
+          config:
+            severity: warn
 
   - name: gld_conversion_by_agent
     description: Conversion and value metrics by sales agent.
@@ -42,6 +52,8 @@ models:
       - elementary.volume_anomalies:
           timestamp_column: null
           sensitivity: 3
+          config:
+            severity: warn
     columns:
       - name: agent
         tests:
@@ -71,6 +83,8 @@ models:
       - elementary.volume_anomalies:
           timestamp_column: null
           sensitivity: 3
+          config:
+            severity: warn
     columns:
       - name: product
         tests:

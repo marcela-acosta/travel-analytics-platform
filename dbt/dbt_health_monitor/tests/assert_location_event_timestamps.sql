@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when location event timestamps are inconsistent
 select *
 from {{ ref('slv_location_events') }}

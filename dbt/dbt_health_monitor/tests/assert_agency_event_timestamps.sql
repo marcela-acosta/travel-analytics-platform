@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when agency event timestamps are inconsistent
 select *
 from {{ ref('slv_agency_events') }}

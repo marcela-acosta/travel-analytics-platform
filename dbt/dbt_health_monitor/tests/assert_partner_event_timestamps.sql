@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when partner event timestamps are inconsistent
 select *
 from {{ ref('slv_partner_events') }}

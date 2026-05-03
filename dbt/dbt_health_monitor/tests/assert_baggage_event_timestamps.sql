@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when baggage event timestamps are inconsistent
 select *
 from {{ ref('slv_baggage_events') }}

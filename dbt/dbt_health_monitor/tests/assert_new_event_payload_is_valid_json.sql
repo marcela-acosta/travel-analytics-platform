@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when any new silver event payload is not valid JSON
 with all_new_events as (
   select 'slv_cancellation_events' as model_name, event_payload

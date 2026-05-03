@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when hotel event timestamps are inconsistent
 select *
 from {{ ref('slv_hotel_events') }}

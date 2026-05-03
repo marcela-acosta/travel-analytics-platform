@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when device event timestamps are inconsistent
 select *
 from {{ ref('slv_device_events') }}

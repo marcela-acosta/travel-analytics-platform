@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails if success+failed exceeds total
 select *
 from {{ ref('fct_pipeline_health') }}

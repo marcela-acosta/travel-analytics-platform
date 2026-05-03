@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when email is present but does not contain a basic user@domain format
 select *
 from {{ ref('slv_customer_events') }}

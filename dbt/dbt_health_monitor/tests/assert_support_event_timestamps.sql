@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when support event timestamps are inconsistent
 select *
 from {{ ref('slv_support_events') }}

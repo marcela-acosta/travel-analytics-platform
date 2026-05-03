@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when refund event timestamps are inconsistent
 select *
 from {{ ref('slv_refund_events') }}

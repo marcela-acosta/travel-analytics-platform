@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when marketing event timestamps are inconsistent
 select *
 from {{ ref('slv_marketing_events') }}

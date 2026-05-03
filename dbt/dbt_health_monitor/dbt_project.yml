@@ -20,8 +20,8 @@ vars:
   raw_dataset: "raw_health_monitor"
   bronze_dataset: "bronze"
 
-on-run-end:
-  - "{{ elementary.on_run_end() }}"
+# elementary.on_run_end() is called by the dedicated dbt_run_elementary Airflow task
+# instead of here, to avoid running it 39x (once per Cosmos individual model task).
 
 models:
   dbt_health_monitor:

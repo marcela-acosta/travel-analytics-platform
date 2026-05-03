@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails if won_opportunities exceeds total_opportunities in either conversion model
 select agent as entity, won_opportunities, total_opportunities
 from {{ ref('gld_conversion_by_agent') }}

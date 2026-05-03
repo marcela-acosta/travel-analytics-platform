@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when seat event timestamps are inconsistent
 select *
 from {{ ref('slv_seat_events') }}

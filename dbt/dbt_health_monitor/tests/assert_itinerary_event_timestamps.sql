@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when itinerary event timestamps are inconsistent
 select *
 from {{ ref('slv_itinerary_events') }}

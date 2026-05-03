@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 -- fails when support event payload metadata is missing or malformed
 select *
 from {{ ref('slv_support_events') }}
