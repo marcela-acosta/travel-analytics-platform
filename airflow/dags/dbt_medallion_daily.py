@@ -3,18 +3,18 @@ Travel Analytics Platform — dbt orchestration DAG using Astronomer Cosmos.
 
 Cosmos converts each dbt model into an individual Airflow task, giving
 fine-grained visibility, retries per model, and the full dbt lineage
-graph rendered in the Airflow UI.
+graph rendered in the Airflow UI grouped by layer (gold / silver).
 
 Pipeline:
-  [DbtTaskGroup: bronze → silver → gold (one task per model)]
-    → dbt run --select elementary  (Elementary observability tables)
+  models > gold > [one task per gold model]
+  models > silver > [one task per silver model]
+    → dbt_run_elementary  (Elementary observability tables)
 
 Prerequisites:
-  - Airflow connection "google_cloud_default" (Google Cloud Platform type)
-    pointing to /opt/airflow/keys/pipeline-sa.json
-    Set automatically via AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT in docker-compose.
-  - dbt-bigquery and astronomer-cosmos installed (see airflow/Dockerfile).
-  - Run `dbt deps` once inside the container to install dbt packages.
+  - Airflow connection "google_cloud_default" set via
+    AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT in docker-compose.
+  - SA key at /opt/airflow/keys/pipeline-sa.json
+  - Run `dbt deps` once inside the scheduler container.
 """
 
 from datetime import datetime, timedelta
@@ -57,7 +57,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="dbt_pipeline",
+    dag_id="dbt_medallion_daily",
     description="dbt bronze→silver→gold via Cosmos + Elementary observability",
     start_date=datetime(2026, 1, 1),
     schedule="@hourly",
@@ -65,8 +65,8 @@ with DAG(
     default_args=default_args,
     tags=["dbt", "cosmos", "bigquery"],
 ) as dag:
-    transform = DbtTaskGroup(
-        group_id="transform",
+    models = DbtTaskGroup(
+        group_id="models",
         project_config=ProjectConfig(dbt_project_path=DBT_DIR),
         profile_config=profile_config,
         execution_config=ExecutionConfig(dbt_executable_path=DBT_BIN),
@@ -78,4 +78,4 @@ with DAG(
         bash_command=f"cd {DBT_DIR} && {DBT_BIN} run --select elementary --profiles-dir . 2>&1",
     )
 
-    transform >> run_elementary
+    models >> run_elementary
