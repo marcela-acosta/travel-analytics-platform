@@ -8,7 +8,7 @@ import argparse
 def parse_message(msg):
     try:
         data = json.loads(msg.decode("utf-8"))
-        data["ingested_at"] = datetime.utcnow().isoformat()
+        data["ingested_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S") + "Z"
         return data
     except Exception as e:
         print(f"[ERROR] Parsing message failed: {e}")
