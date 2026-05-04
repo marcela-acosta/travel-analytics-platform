@@ -667,7 +667,7 @@ st.markdown(
     "and more — with live filters and drill-down capabilities."
 )
 st.link_button(
-    "🔗 Open Travel Analytics Platform",
+    "🔗 Open in Superset",
     "http://localhost:8088/superset/dashboard/pipeline-health/",
     use_container_width=False,
 )
