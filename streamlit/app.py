@@ -785,7 +785,7 @@ def _chat_dialog():
 
     if _prompt:
         st.session_state.chat_history.append({"role": "user", "content": _prompt})
-        with st.spinner("Analyzing your pipeline data..."):
+        with st.spinner("Analyzing the data..."):
             try:
                 _reply = _agent_chat(_prompt, st.session_state.chat_history[:-1], _raw)
             except Exception as _e:
