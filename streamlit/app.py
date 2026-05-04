@@ -655,7 +655,7 @@ stage_agg = (
 stage_agg["stage"] = stage_agg["stage"].astype(str)
 
 
-if st.button("📧 Send invitation to the platform via email", key="email_top"):
+if st.button("📧 Invite via email", key="email_top"):
     st.session_state["_open_email_dlg"] = True
 
 st.divider()
