@@ -51,7 +51,7 @@ def system_architecture():
                 beam = Dataflow("Apache Beam\n(Direct Runner)")
 
                 with Cluster("Docker — Airflow"):
-                    airflow = Airflow("Airflow 2.10\n+ Cosmos")
+                    airflow = Airflow("Airflow 3.2\n+ Cosmos")
                     pg_airflow = PostgreSQL("Airflow\nMetadata DB")
                     airflow >> pg_airflow
 
