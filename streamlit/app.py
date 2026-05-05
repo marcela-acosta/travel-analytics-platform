@@ -11,6 +11,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
 
 STAGE_ORDER = ["Prospecting", "Qualified", "Proposal", "Negotiation", "Won", "Lost"]
+
+_SUPERSET_EXTERNAL = os.environ.get("SUPERSET_EXTERNAL_URL", "http://34.70.112.25:8088")
+_SUPERSET_INTERNAL = os.environ.get("SUPERSET_INTERNAL_URL", "http://localhost:8088")
+_SUPERSET_USER = os.environ.get("SUPERSET_USER", "admin")
+_SUPERSET_PASSWORD = os.environ.get("SUPERSET_PASSWORD", "admin")
+_EMBED_UUID = "805478cb-4c36-4be2-aedf-c7ae9f21d2b1"
 REGIONS = ["CDMX", "GDL", "MTY", "CUN", "TIJ"]
 PRODUCTS = ["Flight", "Hotel", "Car Rental", "Package 2x", "Package 3x"]
 AGENTS = [f"Agent {i:02d}" for i in range(1, 21)]
@@ -210,6 +216,38 @@ def load_conversion_by_product() -> pd.DataFrame:
         FROM `{project_id}.{dataset}.gld_conversion_by_product`
     """).result()
     return pd.DataFrame([dict(r) for r in rows])
+
+
+@st.cache_data(ttl=240)
+def _get_guest_token() -> str:
+    import requests as _req
+    import re as _re
+
+    s = _req.Session()
+    page = s.get(f"{_SUPERSET_INTERNAL}/login/")
+    csrf = _re.search(r'id="csrf_token"[^>]+value="([^"]+)"', page.text).group(1)
+    s.post(
+        f"{_SUPERSET_INTERNAL}/login/",
+        data={
+            "username": _SUPERSET_USER,
+            "password": _SUPERSET_PASSWORD,
+            "csrf_token": csrf,
+        },
+        allow_redirects=False,
+    )
+    api_csrf = s.get(f"{_SUPERSET_INTERNAL}/api/v1/security/csrf_token/").json()[
+        "result"
+    ]
+    resp = s.post(
+        f"{_SUPERSET_INTERNAL}/api/v1/security/guest_token/",
+        headers={"X-CSRFToken": api_csrf, "Content-Type": "application/json"},
+        json={
+            "resources": [{"type": "dashboard", "id": _EMBED_UUID}],
+            "rls": [],
+            "user": {"username": "guest", "first_name": "Guest", "last_name": "User"},
+        },
+    )
+    return resp.json()["token"]
 
 
 def close_bucket(days: int) -> str:
@@ -660,17 +698,50 @@ if st.button("📧 Invite via email", key="email_top"):
 
 st.divider()
 
-# ── Travel Analytics Platform (Superset) ─────────────────────────────────────
-st.markdown("### Explore the Full Interactive Dashboard")
-st.markdown(
-    "View pipeline funnel, conversion rates, regional breakdowns, agent leaderboard, "
-    "and more — with live filters and drill-down capabilities."
+# ── Travel Analytics Platform (Superset embedded) ────────────────────────────
+_embed_hdr, _embed_btn = st.columns([9, 1])
+_embed_hdr.markdown("### Explore the Full Interactive Dashboard")
+_embed_btn.link_button(
+    "↗ Full screen",
+    f"{_SUPERSET_EXTERNAL}/superset/dashboard/travel-analytics/?expand_filters=false",
+    use_container_width=True,
 )
-st.link_button(
-    "🔗 Open in Superset",
-    "http://34.70.112.25:8088/superset/dashboard/travel-analytics/",
-    use_container_width=False,
-)
+
+try:
+    _token = _get_guest_token()
+    _embed_src = f"{_SUPERSET_EXTERNAL}/embedded/{_EMBED_UUID}?expand_filters=false"
+    _embed_html = f"""<!DOCTYPE html><html><head><style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:transparent;overflow:hidden}}
+iframe{{width:100%;height:820px;border:none;border-radius:8px;display:block}}
+</style></head><body>
+<iframe id="sps" src="{_embed_src}" frameborder="0" allowfullscreen></iframe>
+<script>(function(){{
+  var tk="{_token}",or="{_SUPERSET_EXTERNAL}",fr=document.getElementById('sps');
+  var channel=new MessageChannel(),port1=channel.port1;
+  function sendToken(){{
+    port1.postMessage({{switchboardAction:'emit',method:'guestToken',args:{{guestToken:tk}}}});
+  }}
+  fr.addEventListener('load',function(){{
+    fr.contentWindow.postMessage(
+      {{type:'__embedded_comms__',handshake:'port transfer'}},
+      or,[channel.port2]);
+    port1.start();
+    sendToken();
+    setTimeout(sendToken,500);
+    setTimeout(sendToken,1500);
+    setTimeout(sendToken,3500);
+  }});
+}})();</script></body></html>"""
+    import streamlit.components.v1 as _cmp_embed
+
+    _cmp_embed.html(_embed_html, height=830, scrolling=False)
+except Exception as _embed_err:
+    st.warning(f"Embedded dashboard unavailable: {_embed_err}")
+    st.link_button(
+        "🔗 Open in Superset",
+        f"{_SUPERSET_EXTERNAL}/superset/dashboard/travel-analytics/",
+    )
 
 st.divider()
 
