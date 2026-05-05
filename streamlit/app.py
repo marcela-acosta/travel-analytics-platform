@@ -668,7 +668,7 @@ st.markdown(
 )
 st.link_button(
     "🔗 Open in Superset",
-    "http://localhost:8088/superset/dashboard/pipeline-health/",
+    "http://34.70.112.25:8088/superset/dashboard/travel-analytics/",
     use_container_width=False,
 )
 
